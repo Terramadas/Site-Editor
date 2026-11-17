@@ -3,7 +3,9 @@
 
 Run this on your own computer (it needs internet), after build_site.py:
 
-    python3 website/tools/localize_weebly.py website/docs
+    python3 ../Site-Editor/tools/localize_weebly.py website/docs
+
+(run from the Terramadas folder)
 
 It downloads everything the pages load from Weebly's CDN (cdn*.editmysite.com):
 layout CSS, scripts, fonts, and the images/fonts those CSS files point to.

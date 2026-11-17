@@ -40,3 +40,8 @@ image, optimises the ones that are too big and moves files no page uses to `unus
 
 `docs/simple-editor.html` is the earlier, simpler editor. `docs/jszip.min.js` is JSZip 3.10.1
 (MIT licence, Stuart Knightley).
+
+## Tools for moving a site off Weebly
+`tools/build_site.py` turns a Weebly archive into a working static site (fixes its broken
+paths); `tools/localize_weebly.py` downloads the Weebly files the pages still load (needs
+internet). Both use only Python's standard library. See the notes at the top of each file.

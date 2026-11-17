@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Rebuild a Weebly archive export as a static site for GitHub Pages.
 
-Usage:  python3 -I build_site.py SOURCE_DIR DEST_DIR
+Usage (from the Terramadas folder):
+
+    python3 -I ../Site-Editor/tools/build_site.py "backup Weebly" website/docs
 
 What it fixes (SOURCE_DIR is never modified):
   * Weebly's archive nests some folders one level too deep, so the pages
