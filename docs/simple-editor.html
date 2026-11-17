@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Site Editor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#f6f5f1;--fg:#222;--panel:#fff;--line:#d9d6cc;--acc:#2f6b3a;--accfg:#fff;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1c1a;--fg:#eee;--panel:#262824;--line:#3b3d38;--acc:#7cc48a;--accfg:#111;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
+header{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+button,select,label.btn{font:inherit;padding:5px 10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;cursor:pointer}
+button.p,label.p{background:var(--acc);color:var(--accfg);border-color:var(--acc)}
+button:disabled,select:disabled{opacity:.45;cursor:default}
+.sp{flex:1}
+main{flex:1;display:flex;min-height:0}
+nav{width:200px;overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:8px}
+nav button{display:block;width:100%;text-align:left;margin-bottom:4px}
+nav button.on{border-color:var(--acc);font-weight:600}
+#stage{flex:1;position:relative;display:flex}
+iframe{flex:1;border:0;background:#fff}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;gap:8px}
+#empty p{max-width:380px;margin:0;opacity:.8}
+@media (max-width:700px){main{flex-direction:column}nav{width:auto;display:flex;gap:4px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}nav button{width:auto;white-space:nowrap;margin:0}}
+</style>
+</head>
+<body>
+<header id="bar">
+  <label class="btn p">Open Weebly archive (.zip)<input type="file" id="zipin" accept=".zip" hidden></label>
+  <button data-c="bold" disabled><b>B</b></button>
+  <button data-c="italic" disabled><i>I</i></button>
+  <select id="blk" disabled><option value="p">Paragraph</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option></select>
+  <button id="link" disabled>Link</button>
+  <button data-c="unlink" disabled>Unlink</button>
+  <button data-c="undo" disabled>Undo</button>
+  <button data-c="redo" disabled>Redo</button>
+  <label class="btn" id="imgl">Replace image<input type="file" id="img" accept="image/*" hidden></label>
+  <button id="ttl" disabled>Page title</button>
+  <span class="sp"></span>
+  <button class="p" id="save" disabled>Download edited .zip</button>
+</header>
+<main>
+  <nav id="nav"></nav>
+  <div id="stage">
+    <iframe id="fr" title="Page preview"></iframe>
+    <div id="empty"><h2>Open your Weebly archive</h2><p>Choose the .zip you exported from Weebly. Pages open here for editing, and everything stays in your browser. Scripts are switched off in the preview, so some animated effects won’t show.</p></div>
+  </div>
+</main>
+<script>
+const $=id=>document.getElementById(id), fr=$('fr');
+let zip, files={}, pages={}, dts={}, urls={}, edited=new Set(), cur=null, sel=null;
+const MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',svg:'image/svg+xml',webp:'image/webp',css:'text/css',js:'text/javascript',woff:'font/woff',woff2:'font/woff2',ttf:'font/ttf',ico:'image/x-icon'};
+const ext=p=>p.split('.').pop().toLowerCase();
+const mark=()=>cur&&edited.add(cur);
+
+function resolve(base,rel){
+  if(!rel||/^(https?:|data:|blob:|mailto:|tel:|#|\/\/)/i.test(rel)) return null;
+  try{rel=decodeURIComponent(rel.split(/[?#]/)[0]);}catch(e){return null;}
+  const parts=base.split('/').slice(0,-1);
+  if(rel[0]==='/'){parts.length=0;}
+  for(const s of rel.split('/')){ if(s==='..')parts.pop(); else if(s&&s!=='.')parts.push(s); }
+  return parts.join('/');
+}
+
+async function load(file){
+  zip=await JSZip.loadAsync(file); files={};pages={};dts={};urls={};edited.clear();cur=null;sel=null;
+  const names=Object.keys(zip.files).filter(n=>!zip.files[n].dir&&!n.startsWith('__MACOSX')&&!n.endsWith('.DS_Store'));
+  for(const n of names){
+    if(/^(html?)$/.test(ext(n))) pages[n]=await zip.file(n).async('string');
+    else files[n]=await zip.file(n).async('uint8array');
+  }
+  for(const n in files) if(ext(n)!=='css') urls[n]=URL.createObjectURL(new Blob([files[n]],{type:MIME[ext(n)]||'application/octet-stream'}));
+  for(const n in files) if(ext(n)==='css'){
+    let t=new TextDecoder().decode(files[n]);
+    t=t.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g,(m,q,u)=>{const r=resolve(n,u);return r&&urls[r]?'url("'+urls[r]+'")':m;});
+    urls[n]=URL.createObjectURL(new Blob([t],{type:'text/css'}));
+  }
+  const list=Object.keys(pages).sort((a,b)=>(/(^|\/)index\.html?$/.test(b)?1:0)-(/(^|\/)index\.html?$/.test(a)?1:0)||a.localeCompare(b));
+  $('nav').innerHTML='';
+  list.forEach(n=>{const b=document.createElement('button');b.textContent=n.split('/').pop();b.title=n;b.onclick=()=>show(n);b.dataset.p=n;$('nav').appendChild(b);});
+  document.querySelectorAll('#bar [disabled]').forEach(e=>e.disabled=false);
+  $('empty').style.display='none';
+  if(list.length) show(list[0]); else alert('No HTML pages found in that zip.');
+}
+
+function stash(){ if(cur&&edited.has(cur)&&fr.contentDocument&&fr.contentDocument.documentElement) pages[cur]=serialize(); }
+
+function show(name){
+  stash(); cur=name; sel=null;
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.p===name));
+  const m=pages[name].match(/^\s*<!doctype[^>]*>/i); dts[name]=m?m[0]:'<!DOCTYPE html>';
+  const doc=new DOMParser().parseFromString(pages[name],'text/html');
+  doc.querySelectorAll('[src],link[href]').forEach(el=>{
+    const a=el.hasAttribute('src')?'src':'href', v=el.getAttribute(a), r=resolve(name,v);
+    if(r&&urls[r]){el.setAttribute('data-w-'+a,v);el.setAttribute(a,urls[r]);}
+  });
+  doc.querySelectorAll('script').forEach(s=>{s.setAttribute('data-w-t',s.getAttribute('type')||'');s.setAttribute('type','text/plain');});
+  fr.srcdoc=dts[name]+doc.documentElement.outerHTML;
+}
+
+fr.onload=()=>{
+  const d=fr.contentDocument; if(!d||!cur) return;
+  d.designMode='on'; d.execCommand('styleWithCSS',false,false);
+  const st=d.createElement('style'); st.id='w-style';
+  st.textContent='img{cursor:pointer}img.w-sel{outline:3px solid #2f6b3a;outline-offset:2px}';
+  d.head.appendChild(st);
+  d.addEventListener('input',mark);
+  d.addEventListener('click',e=>{
+    if(e.target.closest('a')) e.preventDefault();
+    d.querySelectorAll('.w-sel').forEach(i=>i.classList.remove('w-sel'));
+    sel=e.target.tagName==='IMG'?e.target:null;
+    if(sel) sel.classList.add('w-sel');
+  });
+};
+
+function serialize(){
+  const c=fr.contentDocument.documentElement.cloneNode(true);
+  const w=c.querySelector('#w-style'); if(w) w.remove();
+  c.querySelectorAll('.w-sel').forEach(e=>{e.classList.remove('w-sel');if(!e.getAttribute('class'))e.removeAttribute('class');});
+  ['src','href'].forEach(a=>c.querySelectorAll('[data-w-'+a+']').forEach(e=>{e.setAttribute(a,e.getAttribute('data-w-'+a));e.removeAttribute('data-w-'+a);}));
+  c.querySelectorAll('script[data-w-t]').forEach(s=>{const t=s.getAttribute('data-w-t');t?s.setAttribute('type',t):s.removeAttribute('type');s.removeAttribute('data-w-t');});
+  return dts[cur]+'\n'+c.outerHTML;
+}
+
+$('zipin').onchange=e=>{if(e.target.files[0]) load(e.target.files[0]);};
+document.body.addEventListener('dragover',e=>e.preventDefault());
+document.body.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f&&/\.zip$/i.test(f.name))load(f);});
+
+$('bar').onmousedown=e=>{if(e.target.closest('button'))e.preventDefault();};
+document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{fr.contentDocument.execCommand(b.dataset.c);mark();});
+$('blk').onchange=e=>{fr.contentDocument.execCommand('formatBlock',false,'<'+e.target.value+'>');mark();};
+$('link').onclick=()=>{const u=prompt('Link address (https://… or page.html)');if(u){fr.contentDocument.execCommand('createLink',false,u);mark();}};
+$('ttl').onclick=()=>{const d=fr.contentDocument,t=prompt('Page title',d.title);if(t!==null){d.title=t;mark();}};
+
+$('img').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f) return;
+  if(!sel){alert('Click an image in the page first, then choose Replace image.');return;}
+  const base=cur.split('/').slice(0,-1).join('/'), clean=Date.now()+'-'+f.name.replace(/[^\w.\-]/g,'_');
+  const rel='images/'+clean, full=(base?base+'/':'')+rel;
+  files[full]=new Uint8Array(await f.arrayBuffer()); urls[full]=URL.createObjectURL(f);
+  sel.setAttribute('data-w-src',rel); sel.src=urls[full]; sel.removeAttribute('srcset'); mark();
+};
+
+$('save').onclick=async()=>{
+  stash();
+  for(const n in pages) if(edited.has(n)) zip.file(n,pages[n]);
+  for(const n in files) zip.file(n,files[n]);
+  const b=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='site-edited.zip'; a.click();
+};
+</script>
+</body>
+</html>

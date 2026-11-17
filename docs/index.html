@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Site editor</title>
+<link rel="stylesheet" href="editor.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand">Site <span>editor</span></div>
+  <button id="btnFolder" hidden title="Open a different website folder"></button>
+  <label class="pagepick">Page <select id="pageSel" title="Page to edit"></select></label>
+  <button id="btnPages" title="Add, rename, reorder or delete pages and the menu">Pages &amp; menu</button>
+  <button id="btnImages" title="Image sizes, unused files and optimising">Images</button>
+  <button id="btnPageSettings" title="Browser tab title and search description">Page settings</button>
+  <span class="sep"></span>
+  <button id="btnUndo" class="icon" title="Undo (⌘Z)" disabled>↶</button>
+  <button id="btnRedo" class="icon" title="Redo (⇧⌘Z)" disabled>↷</button>
+  <div class="seg" role="group" aria-label="View">
+    <button id="vDesk" class="on" title="Desktop view">Desktop</button>
+    <button id="vMob" title="Phone view">Phone</button>
+  </div>
+  <span class="flex"></span>
+  <span id="status" aria-live="polite"></span>
+  <button id="btnPreview" title="Open the saved page in a new tab, with all its scripts running">Preview</button>
+  <button id="btnSave" class="primary" title="Save (⌘S)">Save</button>
+  <button id="btnDownload" hidden title="Download the whole site, with your changes, as a .zip">Download site</button>
+</header>
+
+<main>
+  <aside id="palette" aria-label="Elements">
+    <h3>Elements</h3>
+    <p class="hint">Drag onto the page, or click to add below the selected element.</p>
+    <div class="items">
+      <button class="pal" data-type="title"><span class="ic">T</span>Title</button>
+      <button class="pal" data-type="text"><span class="ic">¶</span>Text</button>
+      <button class="pal" data-type="image"><span class="ic">▣</span>Image</button>
+      <button class="pal" data-type="imagetext"><span class="ic">▣¶</span>Image + text</button>
+      <button class="pal" data-type="button"><span class="ic">▭</span>Button</button>
+      <button class="pal" data-type="columns2"><span class="ic">▥</span>2 columns</button>
+      <button class="pal" data-type="columns3"><span class="ic">▥▥</span>3 columns</button>
+      <button class="pal" data-type="spacer"><span class="ic">↕</span>Spacer</button>
+      <button class="pal" data-type="divider"><span class="ic">—</span>Divider</button>
+      <button class="pal" data-type="embed"><span class="ic">&lt;/&gt;</span>Embed code</button>
+      <button class="pal" data-type="section"><span class="ic">▤</span>Section</button>
+    </div>
+  </aside>
+
+  <div id="stage">
+    <div id="frameWrap">
+      <iframe id="frame" title="Page being edited"></iframe>
+      <div id="overlay">
+        <div id="hoverBox" class="box"><span class="tag"></span></div>
+        <div id="selBox" class="box sel"></div>
+        <div id="selBar" class="bar"></div>
+        <div id="textBar" class="bar textbar"></div>
+        <div id="dropZone"></div>
+        <div id="dropLine"></div>
+      </div>
+      <div id="shield"></div>
+    </div>
+  </div>
+
+  <aside id="inspector" aria-label="Settings"></aside>
+</main>
+
+<div id="start" hidden>
+  <div class="startbox">
+    <h1>Site editor</h1>
+    <p>Open your website to edit it. Nothing leaves your computer; upload the site with GitHub Desktop when you are done.</p>
+    <div class="opt" id="optFolder" hidden>
+      <h3>Open folder</h3>
+      <p>Saves straight into the folder. Chrome, Edge and Brave.</p>
+      <div class="actions"><button class="primary" id="btnReopen" hidden></button><button id="btnChoose">Choose website folder…</button></div>
+    </div>
+    <div class="opt">
+      <h3>Load website</h3>
+      <p>Any browser. Your changes stay in the editor; when you are done, <b>Download site</b> gives you the whole site as a .zip (which you can load again).</p>
+      <div class="actions"><button id="btnLoadFolder">Load folder…</button><button id="btnLoadZip">Load .zip…</button></div>
+    </div>
+    <p class="hint">Choose the <b>website</b> folder (the one that contains <code>docs</code>) or the site folder itself.</p>
+    <p id="startMsg"></p>
+  </div>
+  <input type="file" id="inFolder" webkitdirectory multiple hidden>
+  <input type="file" id="inZip" accept=".zip,application/zip" hidden>
+</div>
+<div id="ghost"></div>
+<div id="modal" hidden><div class="dlg" role="dialog" aria-modal="true"><h2></h2><div class="body"></div><div class="btns"></div></div></div>
+<input type="file" id="fileIn" accept="image/*" hidden>
+<script src="jszip.min.js"></script>
+<script src="local-backend.js"></script>
+<script src="editor.js"></script>
+<script src="images.js"></script>
+</body>
+</html>
