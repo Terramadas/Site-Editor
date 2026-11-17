@@ -78,6 +78,7 @@ def list_area(area):
     return out
 PAGE_RE = re.compile(r'^[a-z0-9][a-z0-9-]*\.html$')
 UL_RE = re.compile(r'(<ul class="wsite-menu-default">)(.*?)(</ul>)', re.S)
+SE_UL_RE = re.compile(r'(<ul\b[^>]*\bdata-se="menu"[^>]*>)(.*?)(\n?[ \t]*</ul>)', re.S)
 FLYOUT_RE = re.compile(r'(initPublishedFlyoutMenus\(\s*)(\[.*?\])(\s*,\s*)"([^"]*)"', re.S)
 
 
@@ -151,6 +152,14 @@ def read_menu():
         return [{'id': str(i.get('id', '')), 'title': i.get('title', ''), 'url': i.get('url', ''),
                  'target': i.get('target', '')} for i in json.loads(m.group(2))]
     items = []
+    se = SE_UL_RE.search(html)
+    if se:   # a site made from a template
+        for li in re.finditer(r'<li\b[^>]*>\s*<a\b([^>]*)>(.*?)</a>', se.group(2), re.S):
+            href = re.search(r'\bhref="([^"]*)"', li.group(1))
+            tgt = re.search(r'\btarget="([^"]*)"', li.group(1))
+            items.append({'id': '', 'title': unescape(re.sub(r'<[^>]+>', '', li.group(2))).strip(),
+                          'url': unescape(href.group(1)) if href else '', 'target': tgt.group(1) if tgt else ''})
+        return items
     um = UL_RE.search(html)
     for li in re.finditer(r'<li[^>]*?(?:id="pg(\d+)")?[^>]*>.*?href="([^"]*)".*?>\s*(.*?)\s*</a>', um.group(2) if um else '', re.S):
         items.append({'id': li.group(1) or '', 'title': re.sub(r'<[^>]+>', '', li.group(3)).strip(),
@@ -166,6 +175,15 @@ def menu_li(item, active):
 
 
 def apply_menu(html, items, page):
+    def se_ul(m):
+        ind = re.search(r'\n([ \t]*)<li', m.group(2))
+        ind = ind.group(1) if ind else '\t\t\t\t\t'
+        lis = '\n'.join('%s<li%s><a href="%s"%s>%s</a></li>' % (
+            ind, ' class="active"' if i['url'] == page else '', escape(i['url']),
+            ' target="%s"' % escape(i['target']) if i.get('target') else '', escape(i['title'])) for i in items)
+        return m.group(1) + '\n' + lis + m.group(3)
+    html = SE_UL_RE.sub(se_ul, html)
+
     def ul(m):
         if '<ul' in m.group(2):
             raise ValueError('sub-menus are not supported')
@@ -311,11 +329,12 @@ class Handler(BaseHTTPRequestHandler):
                 if ext not in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.pdf'):
                     return self.json({'error': 'Only images (jpg, png, gif, webp, svg) or pdf.'}, 400)
                 stem = re.sub(r'[^a-z0-9]+', '-', stem.lower()).strip('-')[:50] or 'image'
-                folder = DOCS / 'uploads' / 'editor'
+                sub = 'downloads' if ext == '.pdf' else 'images/graphics' if ext in ('.png', '.gif', '.svg') else 'images'
+                folder = DOCS / sub
                 folder.mkdir(parents=True, exist_ok=True)
                 fname = '%s-%s%s' % (stem, time.strftime('%Y%m%d-%H%M%S'), ext)
                 (folder / fname).write_bytes(self.body())
-                return self.json({'path': 'uploads/editor/' + fname})
+                return self.json({'path': sub + '/' + fname})
             if url.path == '/__api/menu':
                 return self.json(save_menu(json.loads(self.body())))
             if url.path == '/__api/file':
@@ -328,7 +347,9 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == '/__api/move':
                 data = json.loads(self.body())
                 src = area_path(data.get('from', ''), data.get('path', ''))
-                dst = area_path(data.get('to', ''), data.get('path', ''))
+                dst = area_path(data.get('to', ''), data.get('to_path') or data.get('path', ''))
+                if data.get('to_path') and dst.exists():
+                    return self.json({'error': 'A file with that name already exists.'}, 409)
                 if not src.is_file():
                     return self.json({'error': 'not found'}, 404)
                 dst.parent.mkdir(parents=True, exist_ok=True)

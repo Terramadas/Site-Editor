@@ -1,0 +1,113 @@
+{
+  "id": "massively",
+  "name": "Massively",
+  "by": "HTML5 UP",
+  "url": "https://html5up.net/massively",
+  "licence": "Creative Commons Attribution 3.0 (CC BY 3.0)",
+  "licenceUrl": "https://html5up.net/license",
+  "description": "A big title over a full-screen photo, then your projects as cards with a picture, date, text and buttons. Good for a blog or a portfolio of projects.",
+  "pages": {
+    "index.html": {
+      "title": "{{SITE_NAME}}",
+      "description": "{{TAGLINE}}",
+      "intro": true,
+      "wrapperClass": "fade-in",
+      "main": "home-main.html",
+      "menuTitle": "Projects"
+    },
+    "about.html": {
+      "title": "About | {{SITE_NAME}}",
+      "description": "About {{SITE_NAME}}",
+      "main": "about-main.html",
+      "menuTitle": "About"
+    },
+    "first-project.html": {
+      "title": "My first project | {{SITE_NAME}}",
+      "description": "My first project",
+      "project": true
+    }
+  },
+  "sampleProject": {
+    "page": "first-project.html",
+    "title": "My first project",
+    "date": "{{DATE}}",
+    "text": "A short description of the project: what it is and why you built it. Click to change it, or use + New project to add another.",
+    "image": "images/project-placeholder.jpg",
+    "github": "https://github.com/"
+  },
+  "config": {
+    "areas": {
+      "menu": "#nav",
+      "site": "#header, #copyright",
+      "noDrop": "#nav, #header, #copyright"
+    },
+    "view": {
+      "removeBodyClass": [
+        "is-preload"
+      ],
+      "inject": [
+        {
+          "into": "#wrapper",
+          "html": "<div class=\"bg\"></div>"
+        }
+      ]
+    },
+    "menu": {
+      "activeClass": "active"
+    },
+    "credit": {
+      "url": "https://html5up.net",
+      "name": "HTML5 UP"
+    },
+    "site": {
+      "name": "{{SITE_NAME}}",
+      "copyright": "{{COPYRIGHT}}",
+      "credit": "Template by",
+      "background": "",
+      "social": {
+        "github": "https://github.com/"
+      }
+    },
+    "shared": {
+      "header": "\n\t\t\t<header id=\"header\">\n\t\t\t\t<a href=\"index.html\" class=\"logo\">{{name}}</a>\n\t\t\t</header>\n",
+      "social": "\n\t\t\t\t<ul class=\"icons\">\n{{items}}\t\t\t\t</ul>\n",
+      "socialItem": "\t\t\t\t\t<li><a href=\"{{url}}\" class=\"icon {{icon}}\"><span class=\"label\">{{label}}</span></a></li>\n",
+      "copyright": "\n\t\t\t<div id=\"copyright\">\n\t\t\t\t<ul><li>&copy; {{copyright}}</li><li>{{credit}} <a href=\"https://html5up.net\">HTML5 UP</a></li></ul>\n\t\t\t</div>\n"
+    },
+    "background": {
+      "file": "assets/css/site.css",
+      "css": "#wrapper > .bg {\n\tbackground-image: url(\"../../images/overlay.png\"), linear-gradient(0deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1)), url(\"../../{{path}}\");\n}\n"
+    },
+    "elements": {
+      "title": "<h2>New title</h2>",
+      "text": "<p>Write your text here.</p>",
+      "image": "<div class=\"image fit\"><img src=\"{{placeholder}}\" alt=\"\" /></div>",
+      "imagetext": "<div class=\"row gtr-uniform\" data-se=\"cols\"><div class=\"col-6 col-12-small\" data-se=\"col\"><div class=\"image fit\"><img src=\"{{placeholder}}\" alt=\"\" /></div></div><div class=\"col-6 col-12-small\" data-se=\"col\"><h3>Title</h3><p>Write your text here.</p></div></div>",
+      "button": "<ul class=\"actions special\"><li><a href=\"index.html\" class=\"button\">Button text</a></li></ul>",
+      "columns2": "<div class=\"row gtr-uniform\" data-se=\"cols\"><div class=\"col-6 col-12-small\" data-se=\"col\"><p>Left column</p></div><div class=\"col-6 col-12-small\" data-se=\"col\"><p>Right column</p></div></div>",
+      "columns3": "<div class=\"row gtr-uniform\" data-se=\"cols\"><div class=\"col-4 col-12-small\" data-se=\"col\"><p>Column one</p></div><div class=\"col-4 col-12-small\" data-se=\"col\"><p>Column two</p></div><div class=\"col-4 col-12-small\" data-se=\"col\"><p>Column three</p></div></div>",
+      "spacer": "<div class=\"se-spacer\" style=\"height: 40px;\"></div>",
+      "divider": "<hr />",
+      "embed": "<div class=\"se-embed\"><p>Embed code: paste your HTML in the settings panel on the right.</p></div>",
+      "section": "<section class=\"post\" data-se=\"section blocks\"><h2>New section</h2><p>Write your text here.</p></section>"
+    },
+    "columns": {
+      "class": "col-{n} col-12-small"
+    },
+    "newPage": {
+      "remove": [
+        "#intro"
+      ],
+      "removeClass": [
+        [
+          "#wrapper",
+          "fade-in"
+        ]
+      ]
+    },
+    "project": {
+      "listPage": "index.html",
+      "list": "projects"
+    }
+  }
+}

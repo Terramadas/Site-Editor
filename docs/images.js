@@ -128,7 +128,7 @@ async function addImage(file, purpose) {
   const canvas = renderImage(src, recipe, width);
   const png = ext !== 'jpg' && ext !== 'jpeg' && hasAlpha(canvas);
   const blob = await encodeImage(canvas, png, IMG_QUALITY);
-  const path = `uploads/editor/${stem}-${st}.${png ? 'png' : 'jpg'}`;
+  const path = `${purpose === 'bg' ? 'images/backgrounds' : 'images'}/${stem}-${st}.${png ? 'png' : 'jpg'}`;
   await B.writeFile('site', path, blob);
   const edits = await loadEdits();
   edits[path] = { original, recipe, width, quality: IMG_QUALITY };
@@ -373,7 +373,7 @@ async function openImageEditor(target) {
       const out = renderImage(src, st.r, st.width);
       const png = needsPng(out);
       const blob = await encodeImage(out, png, st.quality);
-      const path = `uploads/editor/${stem}-${stp}.${png ? 'png' : 'jpg'}`;
+      const path = `${target.kind === 'bg' ? 'images/backgrounds' : 'images'}/${stem}-${stp}.${png ? 'png' : 'jpg'}`;
       await B.writeFile('site', path, blob);
       const all = await loadEdits();
       all[path] = { original, recipe: st.r, width: st.width, quality: st.quality };
@@ -427,8 +427,8 @@ async function scanSite(onProgress) {
     }
     if (onProgress) onProgress(seen.size);
   }
-  // only files under uploads/ are treated as removable; theme and script files always stay
-  const unused = files.filter(f => !used.has(f.path) && f.path.startsWith('uploads/'));
+  // only uploaded files (images, downloads, Weebly's uploads) are treated as removable; theme and script files always stay
+  const unused = files.filter(f => !used.has(f.path) && /^(uploads|images|downloads)\//.test(f.path));
   return { files, sizes, used, kinds, unused };
 }
 
@@ -445,7 +445,7 @@ async function openOptimise() {
   const edits = await loadEdits();
   const total = scan.files.reduce((t, f) => t + f.size, 0);
   const unusedSize = scan.unused.reduce((t, f) => t + f.size, 0);
-  const imgs = [...scan.kinds.keys()].filter(p => RASTER.test(p) && p.startsWith('uploads/')).sort();
+  const imgs = [...scan.kinds.keys()].filter(p => RASTER.test(p) && /^(uploads|images)\//.test(p)).sort();
   const rows = [];
   const urls = [];
   body.innerHTML = `
@@ -557,4 +557,38 @@ async function openOptimise() {
   };
   await done;
   urls.forEach(u => URL.revokeObjectURL(u));
+}
+
+/* ---------------- renaming an image (updates every page) ---------------- */
+async function renameImage(oldPath) {
+  if (!oldPath || /^data:/.test(oldPath)) { status('This image has no file to rename yet.'); return; }
+  const dir = oldPath.includes('/') ? oldPath.slice(0, oldPath.lastIndexOf('/') + 1) : '';
+  const file = oldPath.slice(dir.length), dot = file.lastIndexOf('.');
+  const ext = dot > 0 ? file.slice(dot) : '', stem = dot > 0 ? file.slice(0, dot) : file;
+  const r = await modal('Rename image', `
+    ${field('File name', `<div class="row"><input type="text" id="rnName" value="${esc(stem)}" style="flex:1"> ${esc(ext)}</div>`)}
+    <p class="hint">Letters, numbers, dashes and underscores. Every page that uses this image is updated.
+      In folder: ${esc(dir || '(top)')}</p>`,
+  [['cancel', 'Cancel'], ['ok', 'Rename', 'primary']], () => ({ name: $('#rnName').value }));
+  if (!r || r.value !== 'ok') return;
+  const newStem = r.data.name.trim().toLowerCase().replace(/\.[a-z0-9]{2,4}$/, '').replace(/[^a-z0-9_]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 80);
+  if (!newStem || newStem === stem) return;
+  const newPath = dir + newStem + ext;
+  if (await B.hasFile('site', newPath)) { status('There is already a file called ' + newStem + ext + ' there.', true); return; }
+  if (!(await confirmLeaveForSiteChange())) return;
+  try {
+    status('Renaming…', true);
+    await B.moveFile('site', oldPath, 'site', newPath);
+    const re = new RegExp(oldPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=[?#"\'()&\\s<>]|$)', 'g');
+    let n = 0;
+    for (const pg of pagesList) {
+      const html = await B.readText(pg.file);
+      const neu = html.replace(re, () => { n++; return newPath; });
+      if (neu !== html) await B.savePage(pg.file, neu);
+    }
+    const edits = await loadEdits();
+    if (edits[oldPath]) { edits[newPath] = edits[oldPath]; delete edits[oldPath]; await saveEdits(edits); }
+    loadPage(page);
+    status(`Renamed to ${newStem + ext} (${n} place${n === 1 ? '' : 's'} updated).`);
+  } catch (e) { status('Could not rename: ' + e.message, true); }
 }

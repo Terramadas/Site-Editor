@@ -188,3 +188,12 @@ kbd { background: #f1efe9; border: 1px solid var(--line); border-radius: 4px; pa
 .optrow .ot { width: 44px; height: 34px; border-radius: 4px; background: #eee center/cover no-repeat; flex: none; }
 .optrow .on { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .optrow .os { white-space: nowrap; }
+
+/* template sites */
+#palette .newproj { width: 100%; margin: 0 0 10px; }
+.themepick { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid #dde2e8; border-radius: 8px; margin: 6px 0; cursor: pointer; line-height: 1.4; }
+.themepick:has(input:checked) { border-color: #2f7de1; background: #f2f7fe; }
+.themepick input { margin-top: 3px; }
+.btnbox { border-bottom: 1px solid #e6e9ee; padding-bottom: 6px; margin-bottom: 8px; }
+[hidden] { display: none !important; }
+#pageSel { max-width: 220px; }

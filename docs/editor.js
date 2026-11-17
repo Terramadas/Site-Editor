@@ -4,8 +4,47 @@
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const frame = $('#frame'), wrap = $('#frameWrap');
-const CONTAINERS = '.wsite-section-elements, td.wsite-multicol-col';
-const TEXT_SEL = '.wsite-button-inner, .paragraph, .wsite-content-title, h1, h2, h3, h4, h5, h6, blockquote';
+/* Where things are on a page. Weebly sites use Weebly's markup; sites made from a template
+   (themes/) mark their parts with data-se="…" and describe themselves in assets/site-editor.json. */
+const WEEBLY = {
+  theme: false,
+  containers: '.wsite-section-elements, td.wsite-multicol-col',
+  section: '.wsite-section-wrap',
+  sectionsRoot: '#wsite-content',
+  column: 'td.wsite-multicol-col',
+  cols: '.wsite-multicol',
+  text: '.wsite-button-inner, .paragraph, .wsite-content-title, h1, h2, h3, h4, h5, h6, blockquote',
+  buttonText: '.wsite-button-inner',
+  noEdit: '.nav, .logo, .mobile-nav, form, .wcustomhtml',
+  menuArea: '.nav, .logo, .hamburger, .mobile-nav',
+  siteArea: '',
+  noDrop: '.nav, .mobile-nav, .dusk-header',
+  isFixed: el => !!el.closest('.wsite-header-elements'),
+  sectionBlocks: s => s.querySelector('.wsite-section-elements'),
+  sectionStyleEl: s => s.querySelector('.wsite-section') || s,
+};
+function themeProfile(cfg) {
+  const a = cfg.areas || {};
+  const join = (...x) => x.filter(Boolean).join(', ');
+  return {
+    theme: true,
+    containers: '[data-se~="blocks"], [data-se~="col"]',
+    section: '[data-se~="section"]',
+    sectionsRoot: '[data-se~="sections"]',
+    column: '[data-se~="col"]',
+    cols: '[data-se~="cols"]',
+    text: 'p, h1, h2, h3, h4, h5, h6, blockquote, .date, ol, ul:not(.actions):not(.icons):not([data-se]), a.button',
+    buttonText: 'a.button',
+    noEdit: join('[data-se~="menu"], [data-se~="lock"], form, .se-embed', a.menu, a.site),
+    menuArea: a.menu || '[data-se~="menu"]',
+    siteArea: a.site || '',
+    noDrop: join('[data-se~="menu"]', a.noDrop),
+    isFixed: el => el.matches('[data-se~="fixed"]'),
+    sectionBlocks: s => s.matches('[data-se~="blocks"]') ? s : s.querySelector('[data-se~="blocks"]'),
+    sectionStyleEl: s => s,
+  };
+}
+let P = WEEBLY, CFG = null;   // CFG: assets/site-editor.json of a template site
 const PLACEHOLDER_IMG = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="360"><rect width="100%" height="100%" fill="#ebe7dd"/>' +
   '<text x="50%" y="50%" font-family="sans-serif" font-size="22" fill="#8a8578" text-anchor="middle">Click to choose an image</text></svg>');
@@ -48,7 +87,7 @@ const ServerB = {
   },
   writeFile: (area, p, data) => api('__api/file?area=' + area + '&path=' + encodeURIComponent(p), { method: 'POST', body: data }),
   async hasFile(area, p) { const r = await fetch('__api/file?area=' + area + '&path=' + encodeURIComponent(p), { method: 'HEAD' }); return r.ok; },
-  moveFile: (from, p, to) => api('__api/move', { method: 'POST', json: { from, to, path: p } }),
+  moveFile: (from, p, to, newPath) => api('__api/move', { method: 'POST', json: { from, to, path: p, to_path: newPath || '' } }),
 };
 
 function status(msg, sticky) {
@@ -154,7 +193,7 @@ async function blobifyEl(el) {
 async function blobifyPage(html) {
   const d = new DOMParser().parseFromString(html, 'text/html');
   await Promise.all([...d.querySelectorAll(RES_SEL + ', [style], style, video[poster]')].map(blobifyEl));
-  return doctypeOf(d) + '\n' + d.documentElement.outerHTML;
+  return doctypeOf(d) + '\n' + leadingComments(d) + d.documentElement.outerHTML;
 }
 // images and backgrounds the editor adds while you work get the same treatment
 function watchFrame() {
@@ -213,24 +252,70 @@ function setupDoc() {
     if (editing && s.rangeCount && editing.contains(s.anchorNode)) { savedRange = s.getRangeAt(0).cloneRange(); updateTextBarState(); }
   });
   doc.addEventListener('mouseleave', () => { hovered = null; });
+  if (P.theme) applyViewFixes();
   if (blobMode) watchFrame();
   markEmpty();
+  loadedShared = P.theme ? sharedRegions(serialize()) : null;
   renderInspector();
   showSaveState();
 }
 
+/* Template sites: things the theme's scripts normally do on the live site (they don't run while
+   editing), done here only for the editor's view. Nothing of this is saved. */
+let removedBodyClasses = [];
+function applyViewFixes() {
+  const v = (CFG && CFG.view) || {};
+  removedBodyClasses = (v.removeBodyClass || []).filter(c => doc.body.classList.contains(c));
+  removedBodyClasses.forEach(c => doc.body.classList.remove(c));
+  (v.inject || []).forEach(x => {
+    const into = doc.querySelector(x.into); if (!into) return;
+    const t = doc.createElement('template'); t.innerHTML = x.html;
+    [...t.content.children].forEach(n => { n.setAttribute('data-editor', '1'); into.appendChild(n); });
+  });
+}
+
+/* Parts marked <!-- se:shared name --> … <!-- /se:shared name --> are the same on every page
+   (header, footer, …). When one changes on a page, saving copies it to the other pages. */
+let loadedShared = null;
+const SHARED_RE = /<!-- se:shared ([\w-]+) -->([\s\S]*?)<!-- \/se:shared \1 -->/g;
+function sharedRegions(html) { const m = new Map(); for (const x of String(html).matchAll(SHARED_RE)) m.set(x[1], x[2]); return m; }
+function replaceShared(html, name, content) {
+  const re = new RegExp('(<!-- se:shared ' + name + ' -->)[\\s\\S]*?(<!-- \\/se:shared ' + name + ' -->)', 'g');
+  return html.replace(re, (all, a, b) => a + content + b);
+}
+// which shared part an element is in (null if none)
+function sharedNameOf(el) {
+  for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+    for (let n = e.previousSibling; n; n = n.previousSibling) {
+      if (n.nodeType === 8) { const m = /^ (\/?)se:shared ([\w-]+) $/.exec(n.data); if (m) { if (m[1]) break; return m[2]; } }
+    }
+  }
+  return null;
+}
+async function copySharedToPages(regions, skipPage) {
+  let n = 0;
+  for (const p of pagesList) {
+    if (p.file === skipPage) continue;
+    let t; try { t = await B.readText(p.file); } catch (e) { continue; }
+    const old = t;
+    for (const [k, v] of regions) t = replaceShared(t, k, v);
+    if (t !== old) { await B.savePage(p.file, t); n++; }
+  }
+  return n;
+}
+
 /* ---------------- structure helpers ---------------- */
 const isEl = n => n && n.nodeType === 1;
-const isContainer = el => isEl(el) && el.matches(CONTAINERS);
-const isSection = el => isEl(el) && el.classList.contains('wsite-section-wrap');
-const isHeaderSection = el => isSection(el) && !!el.closest('.wsite-header-elements');
-const isColumn = el => isEl(el) && el.matches('td.wsite-multicol-col');
-const innerSection = s => s.querySelector('.wsite-section');
+const isContainer = el => isEl(el) && el.matches(P.containers);
+const isSection = el => isEl(el) && el.matches(P.section);
+const isHeaderSection = el => isSection(el) && P.isFixed(el);
+const isColumn = el => isEl(el) && el.matches(P.column);
+const innerSection = s => P.sectionStyleEl(s);
 const realKids = c => [...c.children].filter(ch => !/^(SCRIPT|STYLE|LINK)$/.test(ch.tagName));
 
 function blockOf(el) {
   for (let e = isEl(el) ? el : el && el.parentElement; e && e !== doc.body; e = e.parentElement) {
-    if (e.closest('.nav, .logo, .hamburger, .mobile-nav')) return null;
+    if (e.closest(P.menuArea) || (P.siteArea && e.closest(P.siteArea))) return null;
     if (isContainer(e.parentElement)) return e;
     if (isSection(e)) return e;
   }
@@ -241,14 +326,16 @@ function typeOf(b) {
   if (!b) return null;
   if (isSection(b)) return 'section';
   if (isColumn(b)) return 'column';
-  if (b.matches('.wsite-spacer')) return 'spacer';
+  if (b.dataset.seType && LABELS[b.dataset.seType]) return b.dataset.seType;
+  if (b.matches('.wsite-spacer, .se-spacer')) return 'spacer';
   if (b.matches('h1,h2,h3,h4,h5,h6')) return 'title';
   if (b.matches('.paragraph')) return 'text';
-  if (b.querySelector('.wsite-multicol')) return 'columns';
-  if (b.querySelector('form')) return 'form';
-  if (b.querySelector('.wcustomhtml')) return 'embed';
-  if (b.querySelector('a.wsite-button')) return 'button';
-  if (b.querySelector('hr.styled-hr')) return 'divider';
+  if (P.theme && b.matches('p, blockquote, ul:not(.actions):not(.icons), ol')) return 'text';
+  if (b.matches(P.cols) || b.querySelector(P.cols)) return 'columns';
+  if (b.matches('form') || b.querySelector('form')) return 'form';
+  if (b.matches('.se-embed') || b.querySelector('.wcustomhtml')) return 'embed';
+  if (b.querySelector('a.wsite-button') || (P.theme && b.matches('ul.actions'))) return 'button';
+  if (b.matches('hr') || b.querySelector('hr.styled-hr')) return 'divider';
   if (b.querySelector('.paragraph') && b.querySelector('img')) return 'imagetext';
   if (b.matches('img') || b.querySelector('.wsite-image, img')) return 'image';
   if (b.querySelector('.paragraph, h2')) return 'box';
@@ -257,28 +344,28 @@ function typeOf(b) {
 const LABELS = {
   section: 'Section', column: 'Column', spacer: 'Spacer', title: 'Title', text: 'Text', columns: 'Columns',
   form: 'Form', embed: 'Embed code', button: 'Button', divider: 'Divider', imagetext: 'Image + text',
-  image: 'Image', box: 'Box', element: 'Element',
+  image: 'Image', box: 'Box', element: 'Element', project: 'Project card',
 };
 
 function parentSelectable(e) {
   if (!e || isSection(e)) return null;
-  if (isColumn(e)) return blockOf(e.closest('.wsite-multicol'));
+  if (isColumn(e)) return blockOf(e.closest(P.cols));
   const c = e.parentElement;
   if (isColumn(c)) return c;
-  return c ? c.closest('.wsite-section-wrap') : null;
+  return c ? c.closest(P.section) : null;
 }
 function chainOf(e) { const out = []; for (let x = e; x; x = parentSelectable(x)) out.unshift(x); return out; }
 
 function editableFor(target) {
   if (!isEl(target)) target = target && target.parentElement;
-  if (!target || target.closest('.nav, .logo, .mobile-nav, form, .wcustomhtml')) return null;
-  return target.closest(TEXT_SEL);
+  if (!target || target.closest(P.noEdit)) return null;
+  return target.closest(P.text);
 }
 
 function markEmpty() {
   if (!doc) return;
   $$('[data-ed-empty]', doc).forEach(n => n.removeAttribute('data-ed-empty'));
-  $$(CONTAINERS, doc).forEach(c => { if (!realKids(c).length) c.setAttribute('data-ed-empty', '1'); });
+  $$(P.containers, doc).forEach(c => { if (!realKids(c).length) c.setAttribute('data-ed-empty', '1'); });
 }
 
 /* ---------------- selection & text editing ---------------- */
@@ -361,11 +448,12 @@ function onFrameClick(e) {
   if (editing && editing.contains(e.target)) { if (e.target.closest('a')) e.preventDefault(); return; }
   e.preventDefault(); e.stopPropagation();
   if (suppressClick) { suppressClick = false; return; }
-  if (e.target.closest('.nav, .logo, .hamburger, .mobile-nav')) { selected = null; renderInspector('menu'); return; }
+  if (e.target.closest(P.menuArea)) { if (editing) endEdit(); selected = null; renderInspector('menu'); return; }
+  if (P.siteArea && e.target.closest(P.siteArea)) { if (editing) endEdit(); selected = null; renderInspector('site'); return; }
   const b = blockOf(e.target);
   if (!b) { deselect(); return; }
   const ed = editableFor(e.target);
-  if (ed && !ed.matches('.wsite-button-inner')) { select(b); startEdit(ed, e.clientX, e.clientY); return; }
+  if (ed && !ed.matches(P.buttonText)) { select(b); startEdit(ed, e.clientX, e.clientY); return; }
   select(b);
 }
 
@@ -391,7 +479,7 @@ function onKey(e) {
   if (!$('#modal').hidden) return;
   if (editing) {
     if (e.key === 'Escape') { e.preventDefault(); const el = editing; endEdit(); select(blockOf(el) || selected); return; }
-    if (e.key === 'Enter' && editing.matches('.wsite-button-inner')) { e.preventDefault(); endEdit(); return; }
+    if (e.key === 'Enter' && editing.matches(P.buttonText)) { e.preventDefault(); endEdit(); return; }
     if (e.key === 'Enter' && !e.shiftKey) {
       const s = win.getSelection();
       const inList = s.anchorNode && (isEl(s.anchorNode) ? s.anchorNode : s.anchorNode.parentElement).closest('li');
@@ -477,17 +565,17 @@ function findDrop(x, y) {
   x = Math.max(2, Math.min(vw - 3, x)); y = Math.max(2, Math.min(vh - 3, y));
   const kind = drag.kind;
   if (kind === 'section') {
-    const main = doc.getElementById('wsite-content');
+    const main = doc.querySelector(P.sectionsRoot);
     return main ? slotIn(main, realKids(main).filter(isSection), y) : null;
   }
   let el = doc.elementFromPoint(x, y);
   if (!el) return null;
   if (drag.el && drag.el.contains(el)) el = drag.el.parentElement;
   for (let e = el; e && e !== doc.documentElement; e = e.parentElement) {
-    if (e.closest && e.closest('.nav, .mobile-nav, .dusk-header')) return null;
+    if (e.closest && e.closest(P.noDrop)) return null;
     if (isContainer(e)) return slotIn(e, realKids(e), y);
     if (isSection(e)) {
-      const c = e.querySelector('.wsite-section-elements');
+      const c = P.sectionBlocks(e);
       if (c) return slotIn(c, realKids(c), y);
     }
   }
@@ -522,21 +610,22 @@ function addElement(type) {
   if (!doc) return;
   let container, before = null;
   if (type === 'section') {
-    container = doc.getElementById('wsite-content');
-    const sec = selected && (isSection(selected) ? selected : selected.closest('.wsite-section-wrap'));
+    container = doc.querySelector(P.sectionsRoot);
+    const sec = selected && (isSection(selected) ? selected : selected.closest(P.section));
     if (sec && sec.parentElement === container) before = sec.nextElementSibling;
   } else if (selected && isSection(selected)) {
-    container = selected.querySelector('.wsite-section-elements');
+    container = P.sectionBlocks(selected);
   } else if (selected && isColumn(selected)) {
     container = selected;
   } else if (selected && selected.parentElement && isContainer(selected.parentElement)) {
     container = selected.parentElement; before = selected.nextElementSibling;
   } else {
     // nothing selected: add to the end of the section in view
-    const secs = $$('#wsite-content > .wsite-section-wrap', doc);
+    const root = doc.querySelector(P.sectionsRoot);
+    const secs = root ? realKids(root).filter(isSection) : [];
     const mid = win.innerHeight / 2;
     const sec = secs.find(s => { const r = s.getBoundingClientRect(); return r.top <= mid && r.bottom >= mid; }) || secs[0];
-    container = sec && sec.querySelector('.wsite-section-elements');
+    container = sec && P.sectionBlocks(sec);
   }
   if (!container) return;
   const node = mutate(() => { const n = createBlock(type); container.insertBefore(n, before); selected = n; return n; });
@@ -546,7 +635,7 @@ function addElement(type) {
 
 function afterAdd(node, type) {
   renderInspector();
-  if (type === 'image') { const img = node.querySelector('img'); if (img) replaceImage(img, true); }
+  if (type === 'image') { const img = node.matches('img') ? node : node.querySelector('img'); if (img) replaceImage(img, true); }
   else if (type === 'title' || type === 'text') setTimeout(() => { startEdit(node); selectAllIn(node); }, 50);
 }
 function selectAllIn(el) { const r = doc.createRange(); r.selectNodeContents(el); const s = win.getSelection(); s.removeAllRanges(); s.addRange(r); }
@@ -570,9 +659,13 @@ const T = {
   embed: () => '<div><div class="wcustomhtml" style="width:100%; overflow-y:hidden;"><div class="paragraph" style="text-align:center;">Embed code: paste your HTML in the settings panel on the right.</div></div></div>',
   section: () => '<div class="wsite-section-wrap"><div class="wsite-section wsite-body-section"><div class="wsite-section-content"><div class="container"><div class="wsite-section-elements"><div class="wsite-spacer" style="height:40px;"></div><h2 class="wsite-content-title" style="text-align:center;">New section</h2><div class="paragraph" style="text-align:center;">Write your text here.</div><div class="wsite-spacer" style="height:40px;"></div></div></div></div></div></div>',
 };
+function themeElement(type) {
+  const h = CFG && CFG.elements && CFG.elements[type];
+  return h ? h.split('{{placeholder}}').join(PLACEHOLDER_IMG) : null;
+}
 function createBlock(type) {
   const t = doc.createElement('template');
-  t.innerHTML = T[type]().trim();
+  t.innerHTML = (P.theme ? themeElement(type) : T[type]()).trim();
   return t.content.firstElementChild;
 }
 
@@ -689,7 +782,7 @@ function renderSelBar() {
 /* text toolbar */
 function renderTextBar() {
   const tb = $('#textBar');
-  const simple = editing && editing.matches('.wsite-button-inner');
+  const simple = editing && editing.matches(P.buttonText);
   tb.innerHTML = simple ? '<button data-done="1">Done</button>' : `
     <button data-c="bold" title="Bold"><b>B</b></button>
     <button data-c="italic" title="Italic"><i>I</i></button>
@@ -773,9 +866,12 @@ function renderInspector(mode) {
     ins.innerHTML = `<h2>Menu</h2><p class="sub">The menu appears on every page.</p>
       <p>Rename, reorder, add or remove menu items and pages in <b>Pages &amp; menu</b>.</p>
       <div class="actions"><button class="primary" id="goMenu">Open Pages &amp; menu</button></div>`;
+    if (P.theme) $('#goMenu').insertAdjacentHTML('afterend', '<button id="goSite">Site settings (social links)</button>');
     $('#goMenu').onclick = openPagesDialog;
+    if ($('#goSite')) $('#goSite').onclick = openSiteSettings;
     return;
   }
+  if (mode === 'site') { siteInspector(ins); return; }
   if (!selected) {
     ins.innerHTML = `<h2>${esc(doc.title || page)}</h2><p class="sub">${esc(page)}</p>
       <ul class="tips">
@@ -785,14 +881,15 @@ function renderInspector(mode) {
         <li>Use the labels above a selection (Section › Columns › …) to select what's around it, such as a section to change its background.</li>
         <li><kbd>⌘Z</kbd> undo · <kbd>⌘S</kbd> save · <kbd>Delete</kbd> removes the selected element.</li>
       </ul>
-      <div class="actions"><button id="goSettings">Page settings</button><button id="goPages">Pages &amp; menu</button></div>`;
+      <div class="actions"><button id="goSettings">Page settings</button><button id="goPages">Pages &amp; menu</button>${P.theme ? '<button id="goSite">Site settings</button>' : ''}</div>`;
     $('#goSettings').onclick = openPageSettings; $('#goPages').onclick = openPagesDialog;
+    if ($('#goSite')) $('#goSite').onclick = openSiteSettings;
     return;
   }
   const type = typeOf(selected), el = selected;
-  const P = INSPECTORS[type] || INSPECTORS.element;
+  const insp = INSPECTORS[type] || INSPECTORS.element;
   ins.innerHTML = `<h2>${LABELS[type]}</h2><p class="sub">${esc(SUBS[type] || '')}</p><div id="insBody"></div>`;
-  P(el, $('#insBody'));
+  insp(el, $('#insBody'));
   if (type !== 'section' && type !== 'column') appendBlockActions(el, $('#insBody'));
   if (type !== 'column') appendAdvanced(el, $('#insBody'));
 }
@@ -850,17 +947,19 @@ const INSPECTORS = {
     const isHeader = isHeaderSection(el);
     root.innerHTML =
       field('Background image', `<div class="thumb" style="${hasImg ? `background-image:${esc(cs.backgroundImage)}` : ''}">${hasImg ? '' : 'No image'}</div>
-        <div class="actions">${hasImg ? '<button data-k="bgedit" class="primary">Edit image</button>' : ''}<button data-k="bgimg">${hasImg ? 'Replace image' : 'Add image'}</button>${hasImg ? '<button data-k="bgnone">Remove</button>' : ''}</div>`) +
+        <div class="actions">${hasImg ? '<button data-k="bgedit" class="primary">Edit image</button>' : ''}<button data-k="bgimg">${hasImg ? 'Replace image' : 'Add image'}</button>${hasImg ? '<button data-k="bgren">Rename…</button><button data-k="bgnone">Remove</button>' : ''}</div>
+        ${hasImg ? `<p class="hint" style="margin:6px 0 0">${esc(sitePathOf(inner.style.backgroundImage || cs.backgroundImage) || '')}</p>` : ''}`) +
       field('Background colour', `<div class="row"><input type="color" data-k="bgcolor" value="${rgbToHex(cs.backgroundColor) || '#ffffff'}"><button data-k="bgclear">No colour</button></div>`) +
       (hasImg ? field('Image position', choice('pos', [['50% 0%', 'Top'], ['50% 50%', 'Middle'], ['50% 100%', 'Bottom']], posKey(inner.style.backgroundPosition))) : '') +
-      (isHeader ? field('Height', `<div class="row"><input type="range" min="150" max="900" step="10" data-k="h" value="${parseInt(inner.style.height) || inner.offsetHeight}"><span data-k="hv">${parseInt(inner.style.height) || inner.offsetHeight}px</span></div>`) : '') +
-      (isHeader ? '<p class="hint">This is the page banner. It cannot be moved or deleted.</p>' :
+      (isHeader && !P.theme ? field('Height', `<div class="row"><input type="range" min="150" max="900" step="10" data-k="h" value="${parseInt(inner.style.height) || inner.offsetHeight}"><span data-k="hv">${parseInt(inner.style.height) || inner.offsetHeight}px</span></div>`) : '') +
+      (isHeader ? `<p class="hint">${P.theme ? (sharedNameOf(el) ? 'This part is the same on every page: changes here are copied to all pages when you save.' : 'This part of the page cannot be moved or deleted.') : 'This is the page banner. It cannot be moved or deleted.'}</p>` :
         `<div class="actions">
           <button data-k="up">↑ Move up</button><button data-k="down">↓ Move down</button>
           <button data-k="dup">Duplicate</button><button data-k="add">+ Section below</button>
           <button data-k="del" class="danger">Delete section</button></div>`);
     const q = k => root.querySelector(`[data-k=${k}]`);
     if (q('bgedit')) q('bgedit').onclick = () => openImageEditor({ kind: 'bg', el: inner, section: el });
+    if (q('bgren')) q('bgren').onclick = () => renameImage(sitePathOf(inner.style.backgroundImage || cs.backgroundImage));
     q('bgimg').onclick = async () => {
       const path = await pickAndUpload('bg'); if (!path) return;
       mutate(() => {
@@ -887,27 +986,30 @@ const INSPECTORS = {
 
   title(el, root) { textInspector(el, root); },
   text(el, root) { textInspector(el, root); },
-  box(el, root) { root.innerHTML = '<div class="actions"><button data-k="edit">Edit text</button></div>'; root.querySelector('[data-k=edit]').onclick = () => { const t = el.querySelector(TEXT_SEL); if (t) startEdit(t); }; },
+  box(el, root) { root.innerHTML = '<div class="actions"><button data-k="edit">Edit text</button></div>'; root.querySelector('[data-k=edit]').onclick = () => { const t = el.querySelector(P.text); if (t) startEdit(t); }; },
   imagetext(el, root) { INSPECTORS.image(el, root); },
 
   image(el, root) {
     const img = el.matches('img') ? el : el.querySelector('img');
     if (!img) { root.innerHTML = ''; return; }
-    const holder = img.closest('.wsite-image') || el;
+    const holder = img.closest('.wsite-image, .image') || el;
     const a = img.closest('a');
-    const cap = holder.querySelector(':scope > div[style*="font-size:90%"], :scope > div[style*="font-size: 90%"]');
+    const cap = P.theme ? null : holder.querySelector(':scope > div[style*="font-size:90%"], :scope > div[style*="font-size: 90%"]');
+    const clickOpts = P.theme ? [['link', 'Open link'], ['none', 'Nothing']] : [['zoom', 'Enlarge'], ['link', 'Open link'], ['none', 'Nothing']];
     const mode = !a || !a.getAttribute('href') ? 'none' : (/lightbox/i.test((a.getAttribute('onclick') || '') + (a.getAttribute('rel') || '') + a.className) ? 'zoom' : 'link');
     const w = /%$/.test(img.style.width) ? parseInt(img.style.width) : 100;
     root.innerHTML =
-      field('Picture', `<div class="thumb" style="background-image:url('${esc(img.src)}');background-size:contain"></div><div class="actions"><button data-k="edit" class="primary">Edit image</button><button data-k="rep">Replace image</button></div>`) +
+      field('Picture', `<div class="thumb" style="background-image:url('${esc(img.src)}');background-size:contain"></div><div class="actions"><button data-k="edit" class="primary">Edit image</button><button data-k="rep">Replace image</button><button data-k="ren">Rename…</button></div>
+        <p class="hint" style="margin:6px 0 0">${esc(sitePathOf(img.getAttribute('src')) || '')}</p>`) +
       field('Description (alt text)', `<input type="text" data-k="alt" value="${esc(img.getAttribute('alt') || '')}" placeholder="What is in the picture?">`) +
       field('Size', `<div class="row"><input type="range" min="10" max="100" data-k="w" value="${w}"><span data-k="wv">${img.style.width && img.style.width !== 'auto' ? w + '%' : 'original'}</span><button data-k="wauto">Original</button></div>`) +
       field('Align', choice('align', ALIGN, alignOf(holder))) +
       (cap ? field('Caption', `<input type="text" data-k="cap" value="${esc(cap.textContent.trim())}">`) : '') +
-      field('When clicked', choice('click', [['zoom', 'Enlarge'], ['link', 'Open link'], ['none', 'Nothing']], mode)) +
+      field('When clicked', choice('click', clickOpts, mode)) +
       `<div data-k="linkbox" ${mode === 'link' ? '' : 'hidden'}>${linkFields(mode === 'link' ? a.getAttribute('href') : '', a && a.target)}</div>`;
     const q = k => root.querySelector(`[data-k=${k}]`);
     q('rep').onclick = () => replaceImage(img);
+    q('ren').onclick = () => renameImage(sitePathOf(img.getAttribute('src')));
     q('edit').onclick = () => openImageEditor({ kind: 'img', img });
     q('alt').oninput = live(() => img.setAttribute('alt', q('alt').value));
     q('w').oninput = live(() => { img.style.width = q('w').value + '%'; img.style.maxWidth = '100%'; q('wv').textContent = q('w').value + '%'; });
@@ -915,7 +1017,11 @@ const INSPECTORS = {
     onChoice(root, 'align', live(v => { holder.style.textAlign = v; }));
     if (cap) q('cap').oninput = live(() => { cap.textContent = q('cap').value; });
     // the image's <a> (created only when a click behaviour is actually set)
-    const getLink = () => img.closest('a') || (() => { const n = doc.createElement('a'); img.before(n); n.appendChild(img); return n; })();
+    const getLink = () => img.closest('a') || (() => {
+      const n = doc.createElement('a');
+      if (P.theme && img.parentElement && img.parentElement.matches('.image')) { const h = img.parentElement; n.className = h.className; h.replaceWith(n); n.appendChild(img); return n; }
+      img.before(n); n.appendChild(img); return n;
+    })();
     onChoice(root, 'click', live(v => {
       q('linkbox').hidden = v !== 'link';
       const link = getLink();
@@ -929,6 +1035,7 @@ const INSPECTORS = {
   },
 
   button(el, root) {
+    if (P.theme) { themeButtons(el, root); return; }
     const a = el.querySelector('a.wsite-button'), inner = a.querySelector('.wsite-button-inner') || a;
     const style = a.classList.contains('wsite-button-highlight') ? 'highlight' : 'normal';
     const size = a.classList.contains('wsite-button-large') ? 'large' : 'small';
@@ -956,6 +1063,7 @@ const INSPECTORS = {
   divider(el, root) { root.innerHTML = '<p class="hint">A thin line in the theme’s style.</p>'; },
 
   columns(el, root) {
+    if (P.theme) { themeColumns(el, root); return; }
     const tr = el.querySelector('.wsite-multicol-tr');
     const tds = [...tr.children].filter(isColumn);
     const pad = parseInt(tds[0] && tds[0].style.paddingLeft) || 15;
@@ -992,6 +1100,7 @@ const INSPECTORS = {
   },
 
   column(el, root) {
+    if (P.theme) { root.innerHTML = '<p class="hint">One column. Drag elements into it. Select the Columns (above) to change how many there are.</p>'; return; }
     root.innerHTML = field('Width (%)', `<input type="number" min="5" max="95" data-k="w" value="${Math.round(parseFloat(el.style.width) || 50)}">`) +
       '<p class="hint">The other columns keep their widths; use the Columns settings to balance them.</p>';
     const w = root.querySelector('[data-k=w]');
@@ -999,7 +1108,7 @@ const INSPECTORS = {
   },
 
   embed(el, root) {
-    const box = el.querySelector('.wcustomhtml');
+    const box = el.querySelector('.wcustomhtml') || el;
     root.innerHTML = '<p class="hint">Scripts in embed code only run in Preview and on the live site, not while editing.</p>' +
       field('HTML', `<textarea data-k="code" spellcheck="false">${esc(unBlob(unInert(box.innerHTML.trim())))}</textarea>`) +
       '<div class="actions"><button class="primary" data-k="apply">Apply</button></div>';
@@ -1007,6 +1116,7 @@ const INSPECTORS = {
   },
 
   form(el, root) {
+    if (P.theme) { root.innerHTML = '<div class="note"><b>A form needs a form service</b> (for example Formspree or a MailerLite form) to send messages; GitHub Pages cannot do that by itself. Paste the service’s code in an Embed code element.</div>'; return; }
     root.innerHTML = `<div class="note"><b>This is a Weebly contact form.</b> It sends messages through Weebly's servers,
       so it will stop working once the site is no longer on Weebly. Replace it with a form service
       (for example Formspree or a MailerLite form) using an Embed code element.</div>`;
@@ -1017,12 +1127,12 @@ const INSPECTORS = {
 
 function textInspector(el, root) {
   root.innerHTML = field('Align', choice('align', [...ALIGN, ['justify', 'Justify']], (el.style.textAlign || 'left'))) +
-    (el.matches('h1,h2,h3,h4,h5,h6,.paragraph') ? field('Type', choice('kind', [['title', 'Title'], ['text', 'Text']], el.matches('.paragraph') ? 'text' : 'title')) : '') +
+    (el.matches('h1,h2,h3,h4,h5,h6,.paragraph') || (P.theme && el.matches('p')) ? field('Type', choice('kind', [['title', 'Title'], ['text', 'Text']], el.matches('.paragraph, p') ? 'text' : 'title')) : '') +
     '<div class="actions"><button data-k="edit" class="primary">Edit text</button></div>';
   onChoice(root, 'align', live(v => { el.style.textAlign = v; }));
   onChoice(root, 'kind', v => mutate(() => {
-    const n = doc.createElement(v === 'title' ? 'h2' : 'div');
-    n.className = v === 'title' ? 'wsite-content-title' : 'paragraph';
+    const n = doc.createElement(v === 'title' ? 'h2' : P.theme ? 'p' : 'div');
+    if (!P.theme) n.className = v === 'title' ? 'wsite-content-title' : 'paragraph';
     if (el.getAttribute('style')) n.setAttribute('style', el.getAttribute('style'));
     n.innerHTML = el.innerHTML; el.replaceWith(n); selected = n;
   }));
@@ -1071,6 +1181,8 @@ function doctypeOf(d) {
 
 function serialize() {
   const c = doc.documentElement.cloneNode(true);
+  const body = c.querySelector('body');
+  if (body) removedBodyClasses.forEach(k => body.classList.add(k));
   c.querySelectorAll('[data-editor]').forEach(n => n.remove());
   c.querySelectorAll('[contenteditable]').forEach(n => n.removeAttribute('contenteditable'));
   c.querySelectorAll('[data-ed-empty]').forEach(n => n.removeAttribute('data-ed-empty'));
@@ -1079,7 +1191,13 @@ function serialize() {
     s.removeAttribute('data-ed-type');
     if (t) s.setAttribute('type', t); else s.removeAttribute('type');
   });
-  return doctypeOf(doc) + '\n' + unBlob(c.outerHTML) + '\n';
+  return doctypeOf(doc) + '\n' + leadingComments(doc) + unBlob(c.outerHTML) + '\n';
+}
+// comments before <html> (such as a template's credit) are kept
+function leadingComments(d) {
+  let out = '';
+  for (const n of d.childNodes) { if (n === d.documentElement) break; if (n.nodeType === 8) out += '<!--' + n.data + '-->\n'; }
+  return out;
 }
 
 function unInert(html) {
@@ -1096,6 +1214,15 @@ async function save() {
     if (/blob:/.test(html)) throw new Error('the page still contains a temporary image address. Reload the page and try again.');
     await B.savePage(page, html);
     setDirty(false);
+    if (P.theme && loadedShared) {
+      const now = sharedRegions(html), changed = new Map([...now].filter(([k, v]) => loadedShared.get(k) !== v));
+      loadedShared = now;
+      if (changed.size) {
+        status('Copying ' + [...changed.keys()].join(', ') + ' to the other pages…', true);
+        const n = await copySharedToPages(changed, page);
+        if (n) { status('Saved. The ' + [...changed.keys()].join(', ') + ' changed on ' + n + ' other page' + (n === 1 ? '' : 's') + ' too.'); if (isLoaded()) updateDownload(); refreshPages().catch(() => {}); return true; }
+      }
+    }
     if (isLoaded()) { status('Saved in the editor. Use “Download site” to keep it.'); updateDownload(); }
     else status('Saved ' + page);
     refreshPages().catch(() => {});
@@ -1210,12 +1337,12 @@ async function newPageDialog(fromFile, duplicate) {
     while (pagesList.some(p => p.file === file)) file = slugify(r.data.title) + '-' + (n++) + '.html';
     const src = await B.readText(fromFile);
     const d = new DOMParser().parseFromString(src, 'text/html');
-    d.title = r.data.title;
+    d.title = P.theme ? r.data.title + (CFG.site && CFG.site.name ? ' | ' + CFG.site.name : '') : r.data.title;
     if (!duplicate) {
-      const main = d.getElementById('wsite-content');
-      if (main) main.innerHTML = T.section().replace('New section', esc(r.data.title));
+      if (P.theme) themePageBody(d, fillTpl((CFG.newPage && CFG.newPage.main) || CFG.elements.section, { title: r.data.title }));
+      else { const main = d.getElementById('wsite-content'); if (main) main.innerHTML = T.section().replace('New section', esc(r.data.title)); }
     }
-    await B.savePage(file, doctypeOf(d) + '\n' + d.documentElement.outerHTML + '\n', true);
+    await B.savePage(file, docHtml(src, d), true);
     const menu = await B.menu();
     if (r.data.menu) menu.push({ id: '', title: r.data.title, url: file, target: '' });
     await B.saveMenu(menu);
@@ -1232,7 +1359,7 @@ async function linksTo(file) {
     if (p.file === file) continue;
     let html = '';
     try { html = await B.readText(p.file); } catch (e) { continue; }
-    html = html.replace(/<ul class="wsite-menu-default">[\s\S]*?<\/ul>/g, '').replace(/initPublishedFlyoutMenus\([\s\S]*?\);/g, '');
+    html = html.replace(/<ul class="wsite-menu-default">[\s\S]*?<\/ul>/g, '').replace(/initPublishedFlyoutMenus\([\s\S]*?\);/g, '').replace(/<ul[^>]*data-se="menu"[^>]*>[\s\S]*?<\/ul>/g, '');
     const n = (html.match(new RegExp('href=["\']' + file.replace(/[.]/g, '\\.') + '(#[^"\']*)?["\']', 'g')) || []).length;
     if (n) out.push(`${p.title} (${n})`);
   }
@@ -1337,6 +1464,7 @@ window.addEventListener('beforeunload', e => { if (dirty || (isLoaded() && Local
 const isLoaded = () => B === Local && Local.store() && Local.store().kind === 'memory';
 
 async function isServer() {
+  if (location.protocol === 'file:') return false;
   try { const r = await fetch('__api/pages', { cache: 'no-store' }); return r.ok && /json/.test(r.headers.get('content-type') || ''); }
   catch (e) { return false; }
 }
@@ -1363,6 +1491,7 @@ async function startEditing() {
       updateDownload();
     }
   }
+  await loadSiteConfig();
   try { await refreshPages(); } catch (e) { status('Cannot read the pages: ' + e.message, true); return; }
   const want = decodeURIComponent(location.hash.slice(1));
   loadPage(pagesList.some(p => p.file === want) ? want : (pagesList.some(p => p.file === 'index.html') ? 'index.html' : pagesList[0].file));
@@ -1427,7 +1556,7 @@ $('#btnFolder').onclick = async () => {
       [['cancel', 'Cancel'], ['go', 'Switch site', 'primary']]);
     if (r !== 'go') return;
   }
-  dirty = false; doc = null; frame.removeAttribute('srcdoc'); frame.src = 'about:blank'; selected = null; renderInspector(); resetBlobs();
+  dirty = false; doc = null; CFG = null; P = WEEBLY; frame.removeAttribute('srcdoc'); frame.src = 'about:blank'; selected = null; renderInspector(); resetBlobs();
   $('#btnFolder').hidden = true; $('#btnDownload').hidden = true;
   showStart();
 };

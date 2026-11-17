@@ -14,6 +14,7 @@
   <button id="btnPages" title="Add, rename, reorder or delete pages and the menu">Pages &amp; menu</button>
   <button id="btnImages" title="Image sizes, unused files and optimising">Images</button>
   <button id="btnPageSettings" title="Browser tab title and search description">Page settings</button>
+  <button id="btnSite" hidden title="Site name, social links, copyright line and background, on every page">Site settings</button>
   <span class="sep"></span>
   <button id="btnUndo" class="icon" title="Undo (⌘Z)" disabled>↶</button>
   <button id="btnRedo" class="icon" title="Redo (⇧⌘Z)" disabled>↷</button>
@@ -31,6 +32,7 @@
 <main>
   <aside id="palette" aria-label="Elements">
     <h3>Elements</h3>
+    <button id="palProject" class="primary newproj" hidden title="Make a page for a new project and put its card on the overview">＋ New project</button>
     <p class="hint">Drag onto the page, or click to add below the selected element.</p>
     <div class="items">
       <button class="pal" data-type="title"><span class="ic">T</span>Title</button>
@@ -68,7 +70,7 @@
 <div id="start" hidden>
   <div class="startbox">
     <h1>Site editor</h1>
-    <p>Open your website to edit it. Nothing leaves your computer; upload the site with GitHub Desktop when you are done.</p>
+    <p>Open your website to edit it, or start a new one. Nothing leaves your computer; upload the site with GitHub Desktop when you are done.</p>
     <div class="opt" id="optFolder" hidden>
       <h3>Open folder</h3>
       <p>Saves straight into the folder. Chrome, Edge and Brave.</p>
@@ -78,6 +80,11 @@
       <h3>Load website</h3>
       <p>Any browser. Your changes stay in the editor; when you are done, <b>Download site</b> gives you the whole site as a .zip (which you can load again).</p>
       <div class="actions"><button id="btnLoadFolder">Load folder…</button><button id="btnLoadZip">Load .zip…</button></div>
+    </div>
+    <div class="opt" id="optNew">
+      <h3>New website</h3>
+      <p>Start from a ready-made template and fill in your own text and pictures.</p>
+      <div class="actions"><button id="btnNew">New website…</button></div>
     </div>
     <p class="hint">Choose the <b>website</b> folder (the one that contains <code>docs</code>) or the site folder itself.</p>
     <p id="startMsg"></p>
@@ -92,5 +99,7 @@
 <script src="local-backend.js"></script>
 <script src="editor.js"></script>
 <script src="images.js"></script>
+<script src="themes/index.js"></script>
+<script src="site-themes.js"></script>
 </body>
 </html>

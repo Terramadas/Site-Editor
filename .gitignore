@@ -2,3 +2,5 @@
 ._*
 .DS_Store
 __pycache__/
+# downloaded themes waiting to be adapted
+themes-incoming/

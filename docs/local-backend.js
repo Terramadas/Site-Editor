@@ -100,9 +100,9 @@ const Local = (() => {
       async readFile(area, p) { return (await fh(await areaDir(area), p)).getFile(); },
       async writeFile(area, p, data) { await writeTo(await areaDir(area, true), p, data); },
       async hasFile(area, p) { try { await fh(await areaDir(area), p); return true; } catch (e) { return false; } },
-      async moveFile(from, p, to) {
+      async moveFile(from, p, to, newPath) {
         const data = await self.readFile(from, p);
-        await self.writeFile(to, p, data);
+        await self.writeFile(to, newPath || p, data);
         const { d, name } = await dirFor(await areaDir(from), p);
         await d.removeEntry(name);
       },
@@ -149,9 +149,9 @@ const Local = (() => {
       write: (p, data) => self.writeFile('site', p, data),
       async removeFile(area, p) { changed[area].delete(p); deleted[area].add(p); sinceDownload = true; persist(); },
       remove: p => self.removeFile('site', p),
-      async moveFile(from, p, to) {
+      async moveFile(from, p, to, newPath) {
         // unused files simply stay out of the downloaded site (your loaded folder still has them)
-        if (to !== 'unused') await self.writeFile(to, p, await self.readFile(from, p));
+        if (to !== 'unused') await self.writeFile(to, newPath || p, await self.readFile(from, p));
         await self.removeFile(from, p);
       },
       async listFiles(area) {
@@ -256,10 +256,18 @@ const Local = (() => {
   const escHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const readText = async p => dec.decode(await store.read(p));
 
+  // template sites: <ul data-se="menu"><li class="active"><a href="…">…</a></li>…</ul>
+  const SE_UL_RE = /(<ul\b[^>]*\bdata-se="menu"[^>]*>)([\s\S]*?)(\n?[ \t]*<\/ul>)/g;
   async function menu() {
     const html = await readText('index.html');
     FLY_RE.lastIndex = 0;
     const m = FLY_RE.exec(html);
+    SE_UL_RE.lastIndex = 0;
+    const se = !m && SE_UL_RE.exec(html);
+    if (se) {
+      const ul = new DOMParser().parseFromString('<ul>' + se[2] + '</ul>', 'text/html').querySelector('ul');
+      return [...ul.querySelectorAll(':scope > li')].map(li => { const a = li.querySelector('a'); return { id: '', title: (a ? a.textContent : '').trim(), url: a ? a.getAttribute('href') || '' : '', target: a ? a.getAttribute('target') || '' : '' }; });
+    }
     if (m) return JSON.parse(m[2]).map(i => ({ id: String(i.id || ''), title: i.title || '', url: i.url || '', target: i.target || '' }));
     const ul = new DOMParser().parseFromString(html, 'text/html').querySelector('ul.wsite-menu-default');
     return ul ? [...ul.querySelectorAll(':scope > li')].map(li => {
@@ -272,6 +280,10 @@ const Local = (() => {
     return `<li id="${active ? 'active' : 'pg' + item.id}" class="wsite-menu-item-wrap">\n\t<a\n\t\thref="${escHtml(item.url)}"${target}\n\t\tclass="wsite-menu-item"\n\t\t>\n\t\t${escHtml(item.title)}\n\t</a>\n\t\n</li>`;
   }
   function applyMenu(html, items, page) {
+    html = html.replace(SE_UL_RE, (all, a, inner, b) => {
+      const ind = (/\n([ \t]*)<li/.exec(inner) || [, '\t\t\t\t\t'])[1];
+      return a + '\n' + items.map(i => `${ind}<li${i.url === page ? ' class="active"' : ''}><a href="${escHtml(i.url)}"${i.target ? ` target="${escHtml(i.target)}"` : ''}>${escHtml(i.title)}</a></li>`).join('\n') + b;
+    });
     html = html.replace(UL_RE, (all, a, inner, b) => {
       if (inner.includes('<ul')) throw new Error('sub-menus are not supported');
       return a + '\n' + items.map(i => menuLi(i, i.url === page)).join('\n') + '\n' + b;
@@ -322,7 +334,8 @@ const Local = (() => {
     const ext = (m[2] || '').toLowerCase();
     if (!['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.pdf'].includes(ext)) throw new Error('Only images (jpg, png, gif, webp, svg) or pdf.');
     const stem = (m[1] || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'image';
-    const path = `uploads/editor/${stem}-${stamp().compact}${ext}`;
+    const dir = ext === '.pdf' ? 'downloads' : ['.png', '.gif', '.svg'].includes(ext) ? 'images/graphics' : 'images';
+    const path = `${dir}/${stem}-${stamp().compact}${ext}`;
     await store.write(path, blob);
     return path;
   }
@@ -332,6 +345,34 @@ const Local = (() => {
     await store.remove(page);
     await saveMenu((await menu()).filter(i => i.url !== page));
     return { ok: true };
+  }
+
+  /* ---------------- a new website from a template ---------------- */
+  // files: Map path -> string | Uint8Array. inFolder: write into <chosen folder>/docs (Chrome, Edge, Brave)
+  async function createSite(label, files, inFolder) {
+    if (inFolder) {
+      const h = await window.showDirectoryPicker({ id: 'site-editor-new', mode: 'readwrite' });
+      const has = async (base, parts) => { try { let d = base; for (const x of parts.slice(0, -1)) d = await d.getDirectoryHandle(x); await d.getFileHandle(parts[parts.length - 1]); return true; } catch (e) { return false; } };
+      if (await has(h, ['index.html']) || await has(h, ['docs', 'index.html'])) throw new Error(`“${h.name}” already has a website in it. Choose an empty folder (the folder window can make a new one).`);
+      const docs = await h.getDirectoryHandle('docs', { create: true });
+      for (const [p, data] of files) {
+        const parts = split(p), name = parts.pop();
+        let d = docs;
+        for (const x of parts) d = await d.getDirectoryHandle(x, { create: true });
+        const w = await (await d.getFileHandle(name, { create: true })).createWritable();
+        await w.write(typeof data === 'string' ? enc.encode(data) : data); await w.close();
+      }
+      if (!(await has(h, ['.gitignore']))) {
+        const w = await (await h.getFileHandle('.gitignore', { create: true })).createWritable();
+        await w.write('._*\n.DS_Store\neditor-backups/\nunused-files/\n'); await w.close();
+      }
+      await useFolderHandle(h);
+      return store;
+    }
+    const s = memoryStore(label, { site: new Map() });
+    for (const [p, data] of files) await s.writeFile('site', p, typeof data === 'string' ? enc.encode(data) : data);
+    store = s;
+    return store;
   }
 
   /* ---------------- opening ---------------- */
@@ -425,7 +466,7 @@ const Local = (() => {
   }
 
   return {
-    init, canOpenFolder, openFolder, reopenFolder, lastFolderName, loadFileList, loadZip, inertScripts,
+    init, canOpenFolder, openFolder, reopenFolder, lastFolderName, loadFileList, loadZip, inertScripts, createSite,
     store: () => store,
     pending: async () => (store && store.kind === 'memory' ? loadSession(store.key) : null),
     sessionCount,
@@ -434,7 +475,7 @@ const Local = (() => {
     readFile: (area, p) => store.readFile(area, p),
     writeFile: (area, p, data) => store.writeFile(area, p, data),
     hasFile: (area, p) => store.hasFile(area, p),
-    moveFile: (from, p, to) => store.moveFile(from, p, to),
+    moveFile: (from, p, to, newPath) => store.moveFile(from, p, to, newPath),
     originalsLocation: () => store ? store.originalsLocation : '',
     // the editor backend
     name: 'local',
