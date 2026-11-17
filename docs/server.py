@@ -265,7 +265,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.static(HERE, 'index.html')
         if path.startswith('/__editor/'):
             return self.static(HERE, path[len('/__editor/'):])
-        if re.match(r'^/[a-z0-9.-]+\.(js|css)$', path) and path != '/sw.js':
+        if re.match(r'^/(themes/)?[a-z0-9.-]+\.(js|css)$', path) and path != '/sw.js':
             return self.static(HERE, path[1:])
         if path == '/__api/pages':
             out = []

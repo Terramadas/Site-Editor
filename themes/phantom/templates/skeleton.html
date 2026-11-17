@@ -1,0 +1,82 @@
+<!DOCTYPE HTML>
+<!--
+	{{SITE_NAME}}
+	Template: Phantom by HTML5 UP (html5up.net | @ajlkn)
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html lang="en">
+	<head>
+		<title>{{TITLE}}</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="{{DESCRIPTION}}" />
+		<link rel="stylesheet" href="assets/css/main.css" />
+		<link rel="stylesheet" href="assets/css/site.css" />
+		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+	</head>
+	<body class="is-preload">
+
+		<div id="wrapper">
+
+			<header id="header">
+				<div class="inner">
+<!-- se:shared header -->
+					<a href="index.html" class="logo">
+						<span class="symbol"><img src="images/logo.svg" alt="" /></span><span class="title">{{SITE_NAME}}</span>
+					</a>
+<!-- /se:shared header -->
+					<nav>
+						<ul>
+							<li><a href="#menu">Menu</a></li>
+						</ul>
+					</nav>
+				</div>
+			</header>
+
+			<nav id="menu">
+				<h2>Menu</h2>
+				<ul data-se="menu">
+{{MENU}}
+				</ul>
+			</nav>
+
+			<div id="main">
+				<div class="inner" data-se="sections">
+{{MAIN}}
+				</div>
+			</div>
+
+			<footer id="footer">
+				<div class="inner">
+<!-- se:shared footer -->
+					<section data-se="blocks" data-se-role="footer-about">
+						<h2>About this site</h2>
+						<p>Notes and build logs of my off-grid tinkering projects: power, water, heat and everything in between.</p>
+					</section>
+<!-- /se:shared footer -->
+<!-- se:shared social -->
+					<section data-se-role="social">
+						<h2>Follow</h2>
+						<ul class="icons">
+							<li><a href="https://github.com/" class="icon style2 brands fa-github"><span class="label">GitHub</span></a></li>
+						</ul>
+					</section>
+<!-- /se:shared social -->
+<!-- se:shared copyright -->
+					<ul class="copyright">
+						<li>&copy; {{COPYRIGHT}}</li><li>Template by <a href="https://html5up.net">HTML5 UP</a></li>
+					</ul>
+<!-- /se:shared copyright -->
+				</div>
+			</footer>
+
+		</div>
+
+		<script src="assets/js/jquery.min.js"></script>
+		<script src="assets/js/browser.min.js"></script>
+		<script src="assets/js/breakpoints.min.js"></script>
+		<script src="assets/js/util.js"></script>
+		<script src="assets/js/main.js"></script>
+
+	</body>
+</html>

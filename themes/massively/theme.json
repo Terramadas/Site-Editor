@@ -6,6 +6,7 @@
   "licence": "Creative Commons Attribution 3.0 (CC BY 3.0)",
   "licenceUrl": "https://html5up.net/license",
   "description": "A big title over a full-screen photo, then your projects as cards with a picture, date, text and buttons. Good for a blog or a portfolio of projects.",
+  "order": 1,
   "pages": {
     "index.html": {
       "title": "{{SITE_NAME}}",
@@ -38,7 +39,7 @@
   "config": {
     "areas": {
       "menu": "#nav",
-      "site": "#header, #copyright",
+      "site": "#header, #copyright, [data-se-role~=\"social\"]",
       "noDrop": "#nav, #header, #copyright"
     },
     "view": {
@@ -108,6 +109,10 @@
     "project": {
       "listPage": "index.html",
       "list": "projects"
+    },
+    "starters": {
+      "home": "index.html",
+      "page": "about.html"
     }
   }
 }

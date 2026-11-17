@@ -36,7 +36,11 @@ function docHtml(src, d) {
 // a new page: same header, menu and footer as the page it is made from, with new content
 function themePageBody(d, mainHtml) {
   const root = d.querySelector(P.sectionsRoot);
-  if (root) root.innerHTML = '\n' + mainHtml.replace(/\s+$/, '') + '\n\t\t\t';
+  if (root) {
+    [...root.children].filter(n => n.matches('[data-se~="section"]')).forEach(n => n.remove());
+    const t = d.createElement('template'); t.innerHTML = '\n' + mainHtml.replace(/\s+$/, '') + '\n';
+    root.appendChild(t.content);
+  }
   const np = CFG.newPage || {};
   (np.remove || []).forEach(sel => d.querySelectorAll(sel).forEach(n => n.remove()));
   (np.removeClass || []).forEach(([sel, cls]) => d.querySelectorAll(sel).forEach(n => { n.classList.remove(cls); if (!n.getAttribute('class')) n.removeAttribute('class'); }));
@@ -120,28 +124,33 @@ INSPECTORS.project = (el, root) => {
   const date = el.querySelector('.date');
   const head = el.querySelector('h1, h2, h3');
   const titleLink = head && head.querySelector('a');
-  const pageHref = titleLink ? titleLink.getAttribute('href') || '' : '';
+  const pageLink = titleLink || [...el.querySelectorAll('a[href]')].find(a => !a.matches('.fa-github'));
+  const pageHref = pageLink ? pageLink.getAttribute('href') || '' : '';
   const gh = el.querySelector('a.fa-github');
+  const ghButtons = !!(CFG.project && /fa-github/.test(CFG.project.card || ''));
   root.innerHTML =
     field('Picture', img ? `<div class="thumb" style="background-image:url('${esc(img.src)}');background-size:cover"></div>
       <div class="actions"><button data-k="edit" class="primary">Edit image</button><button data-k="rep">Replace image</button></div>` : '<p class="hint">No picture.</p>') +
     field('Title', `<input type="text" data-k="title" value="${esc(head ? head.textContent.trim() : '')}">`) +
-    (date ? field('Date', `<input type="text" data-k="date" value="${esc(date.textContent.trim())}">`) : '') +
+    field('Date', `<input type="text" data-k="date" value="${esc(date ? date.textContent.trim() : el.getAttribute('data-se-date') || '')}">`) +
     field('Project page', `<select data-k="page">${pagesList.map(p => `<option value="${esc(p.file)}" ${p.file === pageHref ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}</select>`) +
-    field('GitHub address', `<input type="url" data-k="gh" placeholder="https://github.com/you/project (empty: no button)" value="${esc(gh ? gh.getAttribute('href') : '')}">`) +
+    field('GitHub address', `<input type="url" data-k="gh" placeholder="https://github.com/you/project${ghButtons ? ' (empty: no button)' : ''}" value="${esc(gh ? gh.getAttribute('href') : el.getAttribute('data-se-github') || '')}">`) +
+    (ghButtons ? '' : '<p class="hint">This template has no buttons on its cards: the GitHub link shows on the project page (and on the cards of templates that have buttons).</p>') +
     '<p class="hint">Click the short text on the card to change it.</p>' +
     `<div class="actions"><button data-k="open" ${pagesList.some(p => p.file === pageHref) ? '' : 'disabled'}>Open the project page</button></div>`;
   const q = k => root.querySelector(`[data-k=${k}]`);
   if (img) { q('edit').onclick = () => openImageEditor({ kind: 'img', img }); q('rep').onclick = () => replaceImage(img); }
   q('title').oninput = live(() => { (titleLink || head).textContent = q('title').value; if (img) img.setAttribute('alt', q('title').value); });
-  if (date) q('date').oninput = live(() => { date.textContent = q('date').value; });
+  q('date').oninput = live(() => { if (date) date.textContent = q('date').value; el.setAttribute('data-se-date', q('date').value); });
   q('page').onchange = live(() => {
     const old = pageHref, neu = q('page').value;
     el.querySelectorAll('a').forEach(a => { if (a.getAttribute('href') === old && a !== gh) a.setAttribute('href', neu); });
   });
   q('gh').onchange = () => mutate(() => {
     const url = q('gh').value.trim();
+    el.setAttribute('data-se-github', url);
     let a = el.querySelector('a.fa-github');
+    if (!ghButtons && !a) { selected = el; return; }
     if (!url) { if (a) (a.closest('li') || a).remove(); }
     else if (a) a.setAttribute('href', url);
     else {
@@ -181,8 +190,8 @@ async function newProjectDialog() {
     let image = '';
     if (picture) image = await addImage(picture, 'content');
     else if (await B.hasFile('site', 'images/project-placeholder.jpg')) image = 'images/project-placeholder.jpg';
-    const vals = Object.assign({}, r.data, { page: file, image });
     const src = await B.readText(listPage);
+    const vals = Object.assign({}, r.data, { page: file, image, n: ((src.match(/data-se-type="project"/g) || []).length % 6) + 1 });
     const d = new DOMParser().parseFromString(src, 'text/html');
     d.title = r.data.title + (CFG.site && CFG.site.name ? ' | ' + CFG.site.name : '');
     const m = d.querySelector('meta[name="description"]');
@@ -219,13 +228,14 @@ const SOCIAL = [
 function siteInspector(ins) {
   const th = CFG.theme || {};
   ins.innerHTML = `<h2>Site</h2><p class="sub">The site name, social links, copyright line and background are the same on every page.</p>
-    <div class="actions"><button class="primary" id="goSite">Site settings</button></div>
+    <div class="actions"><button class="primary" id="goSite">Site settings</button><button id="goTpl">Change template…</button></div>
     <p class="hint">Template: <b>${esc(th.name || '')}</b> by ${esc(th.by || '')} (${esc(th.licence || '')}). Its licence asks for the link to ${esc((CFG.credit && CFG.credit.name) || th.by || '')} at the bottom of the page, so the editor always keeps it.</p>`;
   $('#goSite').onclick = openSiteSettings;
+  $('#goTpl').onclick = changeTemplateDialog;
 }
 
-function sharedFromSettings(s) {
-  const sh = CFG.shared || {}, out = new Map();
+function sharedFromSettings(s, cfg) {
+  const sh = (cfg || CFG).shared || {}, out = new Map();
   if (sh.header) out.set('header', fillTpl(sh.header, { name: s.name }));
   if (sh.copyright) {
     // the credit link is part of the template and is always put back
@@ -249,6 +259,7 @@ async function openSiteSettings() {
   let bgFile = null, bgReset = false;
   const credit = CFG.credit || { name: (CFG.theme && CFG.theme.by) || '', url: '' };
   const r = await modal('Site settings', `
+    <div class="row" style="justify-content:space-between;margin-bottom:10px"><span>Template: <b>${esc((CFG.theme && CFG.theme.name) || '')}</b></span><button id="ssTpl">Change template…</button></div>
     ${field('Site name (top of every page)', `<input type="text" id="ssName" value="${esc(s.name || '')}">`)}
     <div class="sec-title">Social links</div>
     <p class="hint" style="margin-top:0">Shown as icons in the menu bar. Leave empty to hide.</p>
@@ -268,9 +279,11 @@ async function openSiteSettings() {
     return s;
   },
   () => {
+    $('#ssTpl').onclick = () => closeModal({ value: 'tpl' });
     const b = $('#ssBg'); if (b) b.onclick = async () => { const f = await pickFile('image/*'); if (f) { bgFile = f; bgReset = false; $('#ssBgName').textContent = f.name; } };
     const rb = $('#ssBgReset'); if (rb) rb.onclick = () => { bgFile = null; bgReset = true; $('#ssBgName').textContent = 'the template’s picture'; };
   });
+  if (r && r.value === 'tpl') return changeTemplateDialog();
   if (!r || r.value !== 'ok') return;
   if (!(await confirmLeaveForSiteChange())) return;
   try {
@@ -382,3 +395,184 @@ async function newWebsiteDialog() {
   } catch (e) { msg.textContent = e.name === 'AbortError' ? '' : e.message; }
 }
 $('#btnNew').onclick = newWebsiteDialog;
+
+/* ---------------- change template ----------------
+   Every page is rebuilt in the new template: the template's own header, menu, footer and style,
+   with your content moved in. What moves: page titles and descriptions, the home page's big title
+   and tagline, every section with its text, pictures, buttons and columns (HTML5 UP templates share
+   the same building blocks), project cards (made again in the new template's card style), the
+   footer text, the menu, and the site settings. The background picture goes back to the new
+   template's own. */
+function themeListHtml(current) {
+  return (window.SITE_EDITOR_THEMES || []).map((t, i) => `<label class="themepick"><input type="radio" name="nwTheme" value="${esc(t.id)}" ${(current ? t.id === current : !i) ? 'checked' : ''}>
+      <span><b>${esc(t.name)}</b> <span class="hint">by ${esc(t.by)} · ${esc(t.licence)}${t.id === current ? ' · <b>in use now</b>' : ''}</span><br><span class="hint">${esc(t.description)}</span></span></label>`).join('');
+}
+
+async function changeTemplateDialog() {
+  if (!doc || !P.theme) return;
+  const cur = CFG.theme && CFG.theme.id;
+  const keep = isLoaded() ? 'Use <b>Download site</b> first if you want to keep a copy of the site as it is now.'
+    : `The pages as they are now are kept in <i>${esc(B.backupsLocation() || 'editor-backups')}</i>.`;
+  const r = await modal('Change template', `<p>Every page gets the new template's look. Your text, pictures, projects, menu and site settings come along.</p>
+    ${themeListHtml(cur)}
+    <p class="hint">${keep} Section background colours and pictures, and the site's background picture, are not taken along: set them again in the new template if you want them.</p>`,
+  [['cancel', 'Cancel'], ['ok', 'Change template', 'primary']],
+  () => ({ theme: (document.querySelector('input[name=nwTheme]:checked') || {}).value }));
+  if (!r || r.value !== 'ok' || !r.data.theme) return;
+  if (r.data.theme === cur) { status('That template is already in use.'); return; }
+  if (!(await confirmLeaveForSiteChange())) return;
+  try { await switchTemplate(r.data.theme); }
+  catch (e) { status('Template not changed: ' + e.message, true); }
+}
+
+// the data of a project card, whatever template it was made in
+function cardData(card) {
+  const gh = card.querySelector('a.fa-github');
+  const head = card.querySelector('h1, h2, h3, h4');
+  const link = (head && head.querySelector('a')) || [...card.querySelectorAll('a[href]')].find(a => !a.matches('.fa-github'));
+  const img = card.querySelector('img');
+  const date = card.querySelector('.date');
+  const p = [...card.querySelectorAll('p')].find(x => !x.closest('.date') && !x.matches('.date'));
+  return {
+    title: head ? head.textContent.trim() : '',
+    date: date ? date.textContent.trim() : card.getAttribute('data-se-date') || '',
+    text: p ? p.textContent.trim() : '',
+    image: img ? img.getAttribute('src') || '' : '',
+    page: link ? link.getAttribute('href') || '' : '',
+    github: gh ? gh.getAttribute('href') || '' : card.getAttribute('data-se-github') || '',
+  };
+}
+
+// the content of a section: what is in its block containers (not the containers themselves)
+function sectionBlocks(sec) {
+  if (sec.matches('[data-se~="blocks"]')) return [...sec.children];
+  const out = [];
+  sec.querySelectorAll('[data-se~="blocks"]').forEach(c => {
+    const outer = c.parentElement && c.parentElement.closest('[data-se~="blocks"]');
+    if (!outer || !sec.contains(outer)) out.push(...c.children);
+  });
+  return out;
+}
+const blocksOf = el => el.matches('[data-se~="blocks"]') ? el : el.querySelector('[data-se~="blocks"]');
+const isIntro = el => el.matches('[data-se-role~="intro"]') || (el.matches('[data-se~="fixed"]') && !el.matches('footer') && !!el.querySelector('h1'));
+
+function rebuildPage(oldHtml, starterHtml, NC, isHome) {
+  const parse = t => new DOMParser().parseFromString(t, 'text/html');
+  const od = parse(oldHtml), nd = parse(starterHtml);
+  nd.title = od.title;
+  const om = od.querySelector('meta[name="description"]'), nm = nd.querySelector('meta[name="description"]');
+  if (nm) { if (om) nm.setAttribute('content', om.getAttribute('content') || ''); else nm.remove(); }
+
+  // the home page's big title and tagline
+  const oIntro = [...od.querySelectorAll('[data-se~="section"]')].find(isIntro);
+  const nIntro = [...nd.querySelectorAll('[data-se~="section"]')].find(isIntro);
+  if (nIntro && !isHome) nIntro.remove();
+  if (nIntro && isHome && oIntro) {
+    const oh = oIntro.querySelector('h1'), nh = nIntro.querySelector('h1');
+    if (oh && nh) nh.innerHTML = oh.innerHTML;
+    const op = [...oIntro.querySelectorAll('p')].find(p => !p.closest('.actions')), np = [...nIntro.querySelectorAll('p')].find(p => !p.closest('.actions'));
+    if (op && np) np.innerHTML = op.innerHTML;
+  }
+
+  // sections
+  const oRoot = od.querySelector('[data-se~="sections"]'), nRoot = nd.querySelector('[data-se~="sections"]');
+  if (!nRoot) throw new Error('the new template has no content area');
+  const nList = nRoot.querySelector('[data-se-list]');
+  const listTpl = nList ? (nList.closest('[data-se~="section"]') || nList) : null;
+  [...nRoot.children].filter(n => n.matches('[data-se~="section"]') && !isIntro(n)).forEach(n => n.remove());
+  const sectionTpl = parse('<body>' + (NC.elements && NC.elements.section || '<section data-se="section blocks"></section>')).body.firstElementChild;
+  const newSection = blocks => {
+    const ns = nd.importNode(sectionTpl, true), c = blocksOf(ns) || ns;
+    c.innerHTML = '';
+    blocks.forEach(b => c.appendChild(nd.importNode(b, true)));
+    return ns;
+  };
+  let projects = 0;
+  const oldSections = oRoot ? [...oRoot.children].filter(n => n.matches('[data-se~="section"]') && !isIntro(n)) : [];
+  for (const sec of oldSections) {
+    const oList = sec.querySelector('[data-se-list]') || (sec.matches('[data-se-list]') ? sec : null);
+    if (oList && listTpl) {
+      const cards = [...oList.querySelectorAll('[data-se-type="project"]')].map(cardData);
+      const extras = sectionBlocks(sec).filter(b => !oList.contains(b) && !b.contains(oList));
+      const ns = nd.importNode(listTpl, true);
+      const nl = ns.matches('[data-se-list]') ? ns : ns.querySelector('[data-se-list]');
+      nl.innerHTML = '\n' + cards.map((c, i) => fillTpl(NC.project.card, Object.assign({ n: (i % 6) + 1 }, c)).replace(/\s+$/, '')).join('\n') + '\n';
+      projects += cards.length;
+      if (extras.length) {
+        const nc = blocksOf(ns);
+        if (ns !== nl && nc === ns) {        // the list section has room for a heading: use the old one
+          [...ns.children].filter(x => x !== nl && !x.contains(nl)).forEach(x => x.remove());
+          extras.slice().reverse().forEach(b => ns.insertBefore(nd.importNode(b, true), ns.firstChild));
+        } else nRoot.append('\n', newSection(extras));
+      }
+      nRoot.append('\n', ns);
+    } else {
+      nRoot.append('\n', newSection(sectionBlocks(sec)));
+    }
+  }
+  nRoot.appendChild(nd.createTextNode('\n'));
+
+  // footer text
+  for (const role of ['footer-about', 'footer-contact']) {
+    const o = od.querySelector(`[data-se-role~="${role}"]`) || (role === 'footer-about' ? od.querySelector('#footer [data-se~="blocks"]') : od.querySelector('#footer .contact[data-se~="blocks"]'));
+    const n = nd.querySelector(`[data-se-role~="${role}"]`);
+    if (o && n) { n.innerHTML = ''; [...o.children].forEach(b => n.appendChild(nd.importNode(b, true))); }
+  }
+  return { html: docHtml(starterHtml, nd), projects };
+}
+
+async function switchTemplate(newId) {
+  status('Loading the template…', true);
+  const theme = await loadThemeBundle(newId);
+  const s = JSON.parse(JSON.stringify(CFG.site || {}));
+  const files = siteFilesFrom(theme, { name: s.name || 'Website', tagline: '', author: '' });
+  const NC = JSON.parse(files.get(SITE_CONFIG));
+  s.background = '';
+  NC.site = Object.assign({}, NC.site, s);
+  const starters = NC.starters || { home: 'index.html', page: 'about.html' };
+  const listPage = (CFG.project && CFG.project.listPage) || 'index.html';
+  const menu = await B.menu();
+
+  // 1. every page, rebuilt (nothing is written until all pages worked)
+  const out = [];
+  let projects = 0;
+  for (const p of pagesList) {
+    status('Rebuilding ' + p.file + '…', true);
+    const isHome = p.file === listPage;
+    const starter = files.get(isHome ? starters.home : starters.page);
+    const r = rebuildPage(await B.readText(p.file), starter, NC, isHome);
+    let html = r.html;
+    for (const [k, v] of sharedFromSettings(NC.site, NC)) html = replaceShared(html, k, v);
+    out.push([p.file, html]);
+    projects += r.projects;
+  }
+
+  // 2. the template's files (style, scripts, fonts; its pictures only when not there yet)
+  status('Copying the template files…', true);
+  const oldTheme = CFG.theme && CFG.theme.id ? await loadThemeBundle(CFG.theme.id).catch(() => null) : null;
+  for (const [path, data] of files) {
+    if (/^[^/]+\.html$/i.test(path) || path === SITE_CONFIG) continue;
+    if (!/^assets\//.test(path) && await B.hasFile('site', path)) continue;
+    await B.writeFile('site', path, new Blob([data]));
+  }
+  // the old template's style and scripts that the new one doesn't have go to unused-files
+  if (oldTheme) {
+    for (const path of Object.keys(oldTheme.files)) {
+      if (/^assets\//.test(path) && path !== SITE_CONFIG && !files.has(path) && await B.hasFile('site', path)) {
+        await B.moveFile('site', path, 'unused').catch(() => {});
+      }
+    }
+  }
+
+  // 3. pages, menu, settings
+  for (const [f, html] of out) { status('Saving ' + f + '…', true); await B.savePage(f, html); }
+  await B.saveMenu(menu);
+  CFG = NC;
+  await saveSiteConfig();
+  await loadSiteConfig();
+  await refreshPages();
+  dirty = false;
+  loadPage(page);
+  status(`Template changed to ${NC.theme.name}: ${out.length} pages${projects ? ', ' + projects + ' project cards' : ''}.`, true);
+  if (isLoaded()) updateDownload();
+}

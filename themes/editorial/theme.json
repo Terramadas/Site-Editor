@@ -1,0 +1,103 @@
+{
+  "id": "editorial",
+  "name": "Editorial",
+  "by": "HTML5 UP",
+  "url": "https://html5up.net/editorial",
+  "licence": "Creative Commons Attribution 3.0 (CC BY 3.0)",
+  "licenceUrl": "https://html5up.net/license",
+  "description": "A blog layout: a big welcome with a picture, your projects as a grid of posts, and a sidebar with the menu and a short text about the site.",
+  "order": 3,
+  "pages": {
+    "index.html": {
+      "title": "{{SITE_NAME}}",
+      "description": "{{TAGLINE}}",
+      "main": "home-main.html",
+      "menuTitle": "Projects"
+    },
+    "about.html": {
+      "title": "About | {{SITE_NAME}}",
+      "description": "About {{SITE_NAME}}",
+      "main": "about-main.html",
+      "menuTitle": "About"
+    },
+    "first-project.html": {
+      "title": "My first project | {{SITE_NAME}}",
+      "description": "My first project",
+      "project": true
+    }
+  },
+  "sampleProject": {
+    "page": "first-project.html",
+    "title": "My first project",
+    "date": "{{DATE}}",
+    "text": "A short description of the project: what it is and why you built it. Click to change it, or use + New project to add another.",
+    "image": "images/project-placeholder.jpg",
+    "github": "https://github.com/",
+    "n": 1
+  },
+  "config": {
+    "menu": {
+      "activeClass": "active"
+    },
+    "credit": {
+      "url": "https://html5up.net",
+      "name": "HTML5 UP"
+    },
+    "site": {
+      "name": "{{SITE_NAME}}",
+      "copyright": "{{COPYRIGHT}}",
+      "credit": "Template by",
+      "background": "",
+      "social": {
+        "github": "https://github.com/"
+      }
+    },
+    "columns": {
+      "class": "col-{n} col-12-small"
+    },
+    "project": {
+      "listPage": "index.html",
+      "list": "projects"
+    },
+    "starters": {
+      "home": "index.html",
+      "page": "about.html"
+    },
+    "areas": {
+      "menu": "#menu",
+      "site": "#header, #footer",
+      "noDrop": "#menu, #header, #footer"
+    },
+    "view": {
+      "removeBodyClass": [
+        "is-preload"
+      ],
+      "inject": [
+        {
+          "into": "head",
+          "html": "<style>@media screen and (max-width: 1280px) { #sidebar { position: relative !important; height: auto !important; box-shadow: none !important; } #sidebar > .inner { position: relative !important; height: auto !important; } } @media screen and (max-width: 736px) { #sidebar { display: none !important; } }</style>"
+        }
+      ]
+    },
+    "shared": {
+      "header": "\n\t\t\t\t\t\t<a href=\"index.html\" class=\"logo\"><strong>{{name}}</strong></a>\n",
+      "social": "\n\t\t\t\t\t\t<ul class=\"icons\" data-se-role=\"social\">\n{{items}}\t\t\t\t\t\t</ul>\n",
+      "socialItem": "\t\t\t\t\t\t\t<li><a href=\"{{url}}\" class=\"icon {{icon}}\"><span class=\"label\">{{label}}</span></a></li>\n",
+      "copyright": "\n\t\t\t\t\t<footer id=\"footer\">\n\t\t\t\t\t\t<p class=\"copyright\">&copy; {{copyright}}. {{credit}} <a href=\"https://html5up.net\">HTML5 UP</a>.</p>\n\t\t\t\t\t</footer>\n"
+    },
+    "elements": {
+      "title": "<h2>New title</h2>",
+      "text": "<p>Write your text here.</p>",
+      "image": "<span class=\"image fit\"><img src=\"{{placeholder}}\" alt=\"\" /></span>",
+      "imagetext": "<div class=\"row gtr-uniform\" data-se=\"cols\"><div class=\"col-6 col-12-small\" data-se=\"col\"><span class=\"image fit\"><img src=\"{{placeholder}}\" alt=\"\" /></span></div><div class=\"col-6 col-12-small\" data-se=\"col\"><h3>Title</h3><p>Write your text here.</p></div></div>",
+      "button": "<ul class=\"actions\"><li><a href=\"index.html\" class=\"button primary\">Button text</a></li></ul>",
+      "columns2": "<div class=\"row gtr-uniform\" data-se=\"cols\"><div class=\"col-6 col-12-small\" data-se=\"col\"><p>Left column</p></div><div class=\"col-6 col-12-small\" data-se=\"col\"><p>Right column</p></div></div>",
+      "columns3": "<div class=\"row gtr-uniform\" data-se=\"cols\"><div class=\"col-4 col-12-small\" data-se=\"col\"><p>Column one</p></div><div class=\"col-4 col-12-small\" data-se=\"col\"><p>Column two</p></div><div class=\"col-4 col-12-small\" data-se=\"col\"><p>Column three</p></div></div>",
+      "spacer": "<div class=\"se-spacer\" style=\"height: 40px;\"></div>",
+      "divider": "<hr class=\"major\" />",
+      "embed": "<div class=\"se-embed\"><p>Embed code: paste your HTML in the settings panel on the right.</p></div>",
+      "section": "<section data-se=\"section blocks\"><header class=\"major\"><h2>New section</h2></header><p>Write your text here.</p></section>"
+    },
+    "newPage": {}
+  }
+}

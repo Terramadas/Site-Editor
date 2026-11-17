@@ -1,0 +1,77 @@
+<!DOCTYPE HTML>
+<!--
+	{{SITE_NAME}}
+	Template: Editorial by HTML5 UP (html5up.net | @ajlkn)
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html lang="en">
+	<head>
+		<title>{{TITLE}}</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="{{DESCRIPTION}}" />
+		<link rel="stylesheet" href="assets/css/main.css" />
+		<link rel="stylesheet" href="assets/css/site.css" />
+	</head>
+	<body class="is-preload">
+
+		<div id="wrapper">
+
+			<div id="main">
+				<div class="inner" data-se="sections">
+
+					<header id="header">
+<!-- se:shared header -->
+						<a href="index.html" class="logo"><strong>{{SITE_NAME}}</strong></a>
+<!-- /se:shared header -->
+<!-- se:shared social -->
+						<ul class="icons" data-se-role="social">
+							<li><a href="https://github.com/" class="icon brands fa-github"><span class="label">GitHub</span></a></li>
+						</ul>
+<!-- /se:shared social -->
+					</header>
+
+{{MAIN}}
+				</div>
+			</div>
+
+			<div id="sidebar">
+				<div class="inner">
+
+					<nav id="menu">
+						<header class="major">
+							<h2>Menu</h2>
+						</header>
+						<ul data-se="menu">
+{{MENU}}
+						</ul>
+					</nav>
+
+<!-- se:shared footer -->
+					<section data-se="blocks" data-se-role="footer-about">
+						<header class="major">
+							<h2>About this site</h2>
+						</header>
+						<p>Notes and build logs of my off-grid tinkering projects: power, water, heat and everything in between.</p>
+					</section>
+<!-- /se:shared footer -->
+
+<!-- se:shared copyright -->
+					<footer id="footer">
+						<p class="copyright">&copy; {{COPYRIGHT}}. Template by <a href="https://html5up.net">HTML5 UP</a>.</p>
+					</footer>
+<!-- /se:shared copyright -->
+
+				</div>
+			</div>
+
+		</div>
+
+		<script src="assets/js/jquery.min.js"></script>
+		<script src="assets/js/browser.min.js"></script>
+		<script src="assets/js/breakpoints.min.js"></script>
+		<script src="assets/js/util.js"></script>
+		<script src="assets/js/main.js"></script>
+
+	</body>
+</html>

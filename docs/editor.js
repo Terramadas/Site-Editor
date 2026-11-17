@@ -142,7 +142,12 @@ const blobCache = new Map(), blobBack = new Map();
 const MIME_BY_EXT = { css: 'text/css', js: 'text/javascript', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
   gif: 'image/gif', webp: 'image/webp', ico: 'image/x-icon', woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf', eot: 'application/vnd.ms-fontobject' };
 const isLocalRef = r => r && !/^(data:|blob:|[a-z][a-z0-9+.-]*:|\/\/|#|about:)/i.test(r.trim());
-function resetBlobs() { blobCache.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); blobCache.clear(); blobBack.clear(); }
+function resetBlobs() {
+  // released a little later: the page still on screen may ask for a font or picture until the next one shows
+  const old = [...blobCache.values()];
+  setTimeout(() => old.forEach(p => p.then(u => u && URL.revokeObjectURL(u))), 10000);
+  blobCache.clear(); blobBack.clear();
+}
 function unBlob(s) { return blobBack.size ? String(s).replace(/blob:[^"'()\s<>&]+/g, u => blobBack.get(u) || u) : s; }
 // key: the reference exactly as written (so saving gives it back unchanged); base: folder it is relative to
 function blobFor(ref, base) {
@@ -1003,7 +1008,7 @@ const INSPECTORS = {
         <p class="hint" style="margin:6px 0 0">${esc(sitePathOf(img.getAttribute('src')) || '')}</p>`) +
       field('Description (alt text)', `<input type="text" data-k="alt" value="${esc(img.getAttribute('alt') || '')}" placeholder="What is in the picture?">`) +
       field('Size', `<div class="row"><input type="range" min="10" max="100" data-k="w" value="${w}"><span data-k="wv">${img.style.width && img.style.width !== 'auto' ? w + '%' : 'original'}</span><button data-k="wauto">Original</button></div>`) +
-      field('Align', choice('align', ALIGN, alignOf(holder))) +
+      field('Align', choice('align', ALIGN, P.theme ? imgAlignOf(img) : alignOf(holder))) +
       (cap ? field('Caption', `<input type="text" data-k="cap" value="${esc(cap.textContent.trim())}">`) : '') +
       field('When clicked', choice('click', clickOpts, mode)) +
       `<div data-k="linkbox" ${mode === 'link' ? '' : 'hidden'}>${linkFields(mode === 'link' ? a.getAttribute('href') : '', a && a.target)}</div>`;
@@ -1014,7 +1019,11 @@ const INSPECTORS = {
     q('alt').oninput = live(() => img.setAttribute('alt', q('alt').value));
     q('w').oninput = live(() => { img.style.width = q('w').value + '%'; img.style.maxWidth = '100%'; q('wv').textContent = q('w').value + '%'; });
     q('wauto').onclick = () => mutate(() => { img.style.width = 'auto'; img.style.maxWidth = '100%'; selected = el; });
-    onChoice(root, 'align', live(v => { holder.style.textAlign = v; }));
+    onChoice(root, 'align', live(v => {
+      // template sites show pictures as blocks: they are placed with their margins, not text alignment
+      if (P.theme) { img.style.marginLeft = v === 'left' ? '' : 'auto'; img.style.marginRight = v === 'center' ? 'auto' : ''; }
+      else holder.style.textAlign = v;
+    }));
     if (cap) q('cap').oninput = live(() => { cap.textContent = q('cap').value; });
     // the image's <a> (created only when a click behaviour is actually set)
     const getLink = () => img.closest('a') || (() => {
@@ -1171,6 +1180,10 @@ function appendAdvanced(el, root) {
 }
 
 /* images: see images.js */
+function imgAlignOf(img) {
+  if (img.style.marginLeft !== 'auto') return 'left';
+  return img.style.marginRight === 'auto' ? 'center' : 'right';
+}
 
 /* ---------------- saving ---------------- */
 function doctypeOf(d) {

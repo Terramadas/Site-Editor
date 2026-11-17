@@ -65,6 +65,7 @@ def build(theme_dir):
     for p, b in files.items():
         packed[p] = {'t': b.decode('utf-8')} if Path(p).suffix in TEXT else {'b': base64.b64encode(b).decode('ascii')}
     info = {k: meta[k] for k in ('id', 'name', 'by', 'url', 'licence', 'licenceUrl', 'description')}
+    info['order'] = meta.get('order', 99)
     info['size'] = sum(len(b) for b in files.values())
     bundle = dict(info, files=packed)
     OUT.mkdir(parents=True, exist_ok=True)
@@ -78,6 +79,7 @@ def build(theme_dir):
 
 def main():
     infos = [build(d) for d in sorted(THEMES.iterdir()) if (d / 'theme.json').exists()]
+    infos.sort(key=lambda i: (i.get('order', 99), i['name']))
     if not infos:
         sys.exit('No themes found in ' + str(THEMES))
     (OUT / 'index.js').write_text('/* Built by tools/build_themes.py: the templates for "New website". */\n'

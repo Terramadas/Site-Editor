@@ -60,17 +60,24 @@ A template site works like any other site in the editor, plus:
 * The header, footer and copyright line are the same on every page: change the footer on one
   page and saving copies it to all pages.
 * Buttons, columns (they stack on phones), images and sections use the template's own style.
+* **Change template…** (in Site settings) rebuilds every page in another template: text,
+  pictures, buttons, columns, project cards, the footer text, the menu and the site settings come
+  along. Section backgrounds and the site's background picture don't (set them again if wanted).
+  The old pages are kept in `editor-backups/` (in the editor: Download site first to keep a copy).
 
 ### Templates
-`themes/massively/` is **Massively by [HTML5 UP](https://html5up.net)**, licensed
+Three templates by [HTML5 UP](https://html5up.net), in `themes/`:
+**Massively** (big title over a photo, project cards), **Phantom** (light, projects as coloured
+picture tiles, slide-in menu) and **Editorial** (blog layout with a sidebar). They are licensed
 [CC BY 3.0](https://html5up.net/license): free to use and change, as long as the credit link to
 HTML5 UP stays. The editor always keeps it at the bottom of the page ("Template by HTML5 UP";
 the words can be changed in Site settings, the link can't). Its fonts are reduced to the
-modern `.woff2` files and the demo pictures are left out.
+modern `.woff2` files and the demo pictures are left out (Editorial keeps one, CC0, as its banner).
 
 A template is the theme's own files (`site/`) plus starter pages made from `templates/`, and
 `theme.json`. The parts of a page the editor works with are marked with `data-se="…"`
-attributes, the shared parts with `<!-- se:shared name -->` comments, and every new site
+attributes (`data-se-role` marks the parts that move when switching templates: intro, footer-about,
+footer-contact, social), the shared parts with `<!-- se:shared name -->` comments, and every new site
 gets `assets/site-editor.json` describing them. After changing a template, run
 
     python3 tools/build_themes.py
