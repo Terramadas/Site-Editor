@@ -247,8 +247,11 @@ const Local = (() => {
       const end = low.indexOf('</script', j + 1);
       i = end < 0 ? html.length : end + 8;
     }
-    return out + html.slice(last);
+    out += html.slice(last);
+    // while editing nothing is fetched from other websites (fonts, scripts, trackers…)
+    return out.replace(/<head\b[^>]*>/i, m => m + EDIT_POLICY);
   }
+  const EDIT_POLICY = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; style-src 'self' blob: data: 'unsafe-inline'; script-src 'none'; frame-src 'none'; form-action 'none'" data-editor="1">`;
 
   // the menu is repeated in every page (same as server.py)
   const UL_RE = /(<ul class="wsite-menu-default">)([\s\S]*?)(<\/ul>)/g;

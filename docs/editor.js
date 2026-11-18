@@ -90,13 +90,16 @@ const ServerB = {
   moveFile: (from, p, to, newPath) => api('__api/move', { method: 'POST', json: { from, to, path: p, to_path: newPath || '' } }),
 };
 
+let statusSticky = false;   // a message that stays until something else happens (not replaced when a page finishes loading)
 function status(msg, sticky) {
   const s = $('#status');
   clearTimeout(statusTimer);
+  statusSticky = !!sticky;
   s.textContent = msg; s.className = '';
   if (!sticky) statusTimer = setTimeout(showSaveState, 2600);
 }
 function showSaveState() {
+  statusSticky = false;
   const s = $('#status');
   s.textContent = dirty ? 'Unsaved changes' : 'All changes saved';
   s.className = dirty ? 'dirty' : '';
@@ -261,8 +264,10 @@ function setupDoc() {
   if (blobMode) watchFrame();
   markEmpty();
   loadedShared = P.theme ? sharedRegions(serialize()) : null;
+  outside = null;
+  checkOutside(doc).then(r => { if (doc && r.doc === doc) { outside = r.hosts; if (!selected && !editing) renderInspector(); } }).catch(() => {});
   renderInspector();
-  showSaveState();
+  if (!statusSticky) showSaveState();
 }
 
 /* Template sites: things the theme's scripts normally do on the live site (they don't run while
@@ -886,7 +891,8 @@ function renderInspector(mode) {
         <li>Use the labels above a selection (Section › Columns › …) to select what's around it, such as a section to change its background.</li>
         <li><kbd>⌘Z</kbd> undo · <kbd>⌘S</kbd> save · <kbd>Delete</kbd> removes the selected element.</li>
       </ul>
-      <div class="actions"><button id="goSettings">Page settings</button><button id="goPages">Pages &amp; menu</button>${P.theme ? '<button id="goSite">Site settings</button>' : ''}</div>`;
+      <div class="actions"><button id="goSettings">Page settings</button><button id="goPages">Pages &amp; menu</button>${P.theme ? '<button id="goSite">Site settings</button>' : ''}</div>` + outsideNote();
+    if ($('#goTplFiles')) $('#goTplFiles').onclick = () => refreshTemplateFiles();
     $('#goSettings').onclick = openPageSettings; $('#goPages').onclick = openPagesDialog;
     if ($('#goSite')) $('#goSite').onclick = openSiteSettings;
     return;
@@ -1177,6 +1183,49 @@ function appendAdvanced(el, root) {
     });
   };
   root.appendChild(det);
+}
+
+/* ---------------- privacy: does the page load anything from other websites? ----------------
+   When a visitor opens a page, everything it loads from another website (fonts, scripts, forms,
+   pictures, videos) tells that website the visitor's IP address. The page panel lists them. While
+   editing, the editor blocks them (see EDIT_POLICY in local-backend.js and server.py). */
+let outside = null;   // Map host -> Set of what
+const isOutside = u => /^\s*(https?:)?\/\//i.test(u || '');
+const hostOf = u => { try { return new URL(u.trim().replace(/^\/\//, 'https://')).host; } catch (e) { return u; } };
+async function checkOutside(d) {
+  const hosts = new Map();
+  const add = (u, what) => { const h = hostOf(u); if (!hosts.has(h)) hosts.set(h, new Set()); hosts.get(h).add(what); };
+  const cssRefs = (text, what) => {
+    for (const m of text.matchAll(/@import\s+(?:url\()?\s*["']?([^"')\s;]+)/gi)) if (isOutside(m[1])) add(m[1], what);
+    for (const m of text.matchAll(/url\(\s*["']?([^"')]+)/gi)) if (isOutside(m[1])) add(m[1], what);
+  };
+  const KIND = { SCRIPT: 'script', LINK: 'style or font', IFRAME: 'embedded page', IMG: 'picture', SOURCE: 'video or sound', VIDEO: 'video', AUDIO: 'sound', EMBED: 'embedded file', OBJECT: 'embedded file', INPUT: 'picture' };
+  d.querySelectorAll('script[src], link[href], iframe[src], img[src], source[src], video[src], video[poster], audio[src], embed[src], object[data], input[src]').forEach(el => {
+    if (el.closest('[data-editor]')) return;
+    if (el.tagName === 'LINK' && !/stylesheet|icon|preload|prefetch|preconnect|dns-prefetch|manifest/i.test(el.getAttribute('rel') || '')) return;
+    for (const a of ['src', 'href', 'poster', 'data']) { const v = el.getAttribute(a); if (v && isOutside(v)) add(v, KIND[el.tagName] || 'file'); }
+  });
+  d.querySelectorAll('[style]').forEach(el => cssRefs(el.getAttribute('style'), 'picture'));
+  d.querySelectorAll('style:not([data-editor])').forEach(el => cssRefs(el.textContent, 'style or font'));
+  // the page's own style sheets (and the ones they import)
+  const seen = new Set(), queue = [];
+  d.querySelectorAll('link[rel~="stylesheet"][href]').forEach(l => { const h = unBlob(l.getAttribute('href')); if (!isOutside(h)) queue.push(resolveRef('', h)); });
+  while (queue.length) {
+    const p = queue.shift(); if (!p || seen.has(p) || seen.size > 40) continue; seen.add(p);
+    let text; try { text = await (await B.readFile('site', p)).text(); } catch (e) { continue; }
+    cssRefs(text, 'style or font (' + p + ')');
+    const dir = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+    for (const m of text.matchAll(/@import\s+(?:url\()?\s*["']?([^"')\s;]+)/gi)) if (!isOutside(m[1])) queue.push(resolveRef(dir, m[1]));
+  }
+  return { doc: d, hosts };
+}
+function outsideNote() {
+  if (!outside || !outside.size) return outside ? '<p class="hint">✓ This page loads nothing from other websites.</p>' : '';
+  const fromTemplate = P.theme && [...outside.values()].some(s => [...s].some(w => /\(assets\//.test(w)));
+  return `<div class="note"><b>This page loads things from other websites</b>, so visitors' browsers tell them they are here (their IP address):
+    <ul class="tips">${[...outside].map(([h, w]) => `<li><b>${esc(h)}</b>: ${esc([...w].join(', '))}</li>`).join('')}</ul>
+    While you edit, the editor blocks them. Remove or replace the element that loads them${fromTemplate ? ', or update the template files (newer templates load nothing from other websites)' : ''}.
+    ${fromTemplate ? '<div class="actions"><button id="goTplFiles">Update the template’s files</button></div>' : ''}</div>`;
 }
 
 /* images: see images.js */

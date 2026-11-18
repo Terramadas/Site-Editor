@@ -576,3 +576,20 @@ async function switchTemplate(newId) {
   status(`Template changed to ${NC.theme.name}: ${out.length} pages${projects ? ', ' + projects + ' project cards' : ''}.`, true);
   if (isLoaded()) updateDownload();
 }
+
+async function refreshTemplateFiles() {
+  if (!P.theme || !CFG.theme) return;
+  try {
+    status('Updating the template files…', true);
+    const theme = await loadThemeBundle(CFG.theme.id);
+    const files = siteFilesFrom(theme, { name: (CFG.site && CFG.site.name) || '', tagline: '', author: '' });
+    let n = 0;
+    for (const [path, data] of files) {
+      if (!/^assets\//.test(path) || path === SITE_CONFIG || (CFG.background && path === CFG.background.file)) continue;
+      await B.writeFile('site', path, new Blob([data])); n++;
+    }
+    loadPage(page);
+    status(`Template files updated (${n} files).`);
+    if (isLoaded()) updateDownload();
+  } catch (e) { status('Could not update the template files: ' + e.message, true); }
+}

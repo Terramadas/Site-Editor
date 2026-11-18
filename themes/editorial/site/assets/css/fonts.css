@@ -1,0 +1,50 @@
+/* The template's fonts, kept in the site (nothing is loaded from Google).
+   Licence: SIL Open Font License 1.1, see ../fonts/README.txt */
+
+@font-face {
+	font-family: "Open Sans";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("../fonts/open-sans-v44-latin-regular.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "Open Sans";
+	font-style: italic;
+	font-weight: 400;
+	font-display: swap;
+	src: url("../fonts/open-sans-v44-latin-italic.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "Open Sans";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("../fonts/open-sans-v44-latin-600.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "Open Sans";
+	font-style: italic;
+	font-weight: 600;
+	font-display: swap;
+	src: url("../fonts/open-sans-v44-latin-600italic.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "Roboto Slab";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("../fonts/roboto-slab-v36-latin-regular.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "Roboto Slab";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("../fonts/roboto-slab-v36-latin-700.woff2") format("woff2");
+}

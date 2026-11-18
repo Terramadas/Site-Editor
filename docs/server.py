@@ -140,7 +140,11 @@ def inert_scripts(html):
         out.append('<script data-ed-type="%s" type="text/x-inert"%s>' % (escape(orig, quote=True), attrs))
         last = pos + len(raw)
     out.append(html[last:])
-    return ''.join(out)
+    # while editing nothing is fetched from other websites (fonts, scripts, trackers…)
+    return re.sub(r'<head\b[^>]*>', lambda m: m.group(0) + EDIT_POLICY, ''.join(out), count=1, flags=re.I)
+
+
+EDIT_POLICY = '''<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; style-src 'self' blob: data: 'unsafe-inline'; script-src 'none'; frame-src 'none'; form-action 'none'" data-editor="1">'''
 
 
 # ---------- navigation menu (repeated in every page) ----------

@@ -86,6 +86,14 @@ which writes `docs/themes/<name>.js` (the whole starter site in one file, so New
 works when the editor is opened from disk) and `docs/themes/index.js`. The other HTML5 UP
 templates in `themes-incoming/` can be added the same way.
 
+## Privacy: nothing from other websites
+A page that loads something from another website (fonts, scripts, forms, videos, pictures) tells
+that website the visitor's IP address. The page panel (click next to the page, nothing selected)
+says whether the page loads anything from other websites, and lists them. While you edit, the
+editor blocks them. The templates load nothing from other websites: their fonts fall back to fonts
+every device has (Georgia, Helvetica and similar). Plain links (TidyCal, Buy Me a Coffee…) send
+nothing until a visitor clicks them.
+
 ## Tools for moving a site off Weebly
 `tools/build_site.py` turns a Weebly archive into a working static site (fixes its broken
 paths); `tools/localize_weebly.py` downloads the Weebly files the pages still load (needs
