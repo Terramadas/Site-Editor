@@ -15,6 +15,7 @@ async function loadSiteConfig() {
   $$('.pal').forEach(b => { b.hidden = P.theme && !themeElement(b.dataset.type); });
   $('#btnSite').hidden = !P.theme;
   $('#palProject').hidden = !(P.theme && CFG.project && CFG.project.card);
+  if (typeof updateIssueButtons === 'function') updateIssueButtons().catch(() => {});
 }
 async function saveSiteConfig() {
   await B.writeFile('site', SITE_CONFIG, new Blob([JSON.stringify(CFG, null, 1)], { type: 'application/json' }));
