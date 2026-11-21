@@ -1321,17 +1321,19 @@ async function save() {
     if (/blob:/.test(html)) throw new Error('the page still contains a temporary image address. Reload the page and try again.');
     await B.savePage(page, html);
     setDirty(false);
+    let dateNote = '';
+    try { const d = typeof syncProjectDate === 'function' ? await syncProjectDate() : ''; if (d) dateNote = ' The project card on the overview now shows ' + d + '.'; } catch (e) { dateNote = ' (The date on the project card could not be updated: ' + e.message + ')'; }
     if (P.theme && loadedShared) {
       const now = sharedRegions(html), changed = new Map([...now].filter(([k, v]) => loadedShared.get(k) !== v));
       loadedShared = now;
       if (changed.size) {
         status('Copying ' + [...changed.keys()].join(', ') + ' to the other pages…', true);
         const n = await copySharedToPages(changed, page);
-        if (n) { status('Saved. The ' + [...changed.keys()].join(', ') + ' changed on ' + n + ' other page' + (n === 1 ? '' : 's') + ' too.'); if (isLoaded()) updateDownload(); refreshPages().catch(() => {}); return true; }
+        if (n) { status('Saved. The ' + [...changed.keys()].join(', ') + ' changed on ' + n + ' other page' + (n === 1 ? '' : 's') + ' too.' + dateNote); if (isLoaded()) updateDownload(); refreshPages().catch(() => {}); return true; }
       }
     }
-    if (isLoaded()) { status('Saved in the editor. Use “Download site” to keep it.'); updateDownload(); }
-    else status('Saved ' + page);
+    if (isLoaded()) { status('Saved in the editor. Use “Download site” to keep it.' + dateNote); updateDownload(); }
+    else status('Saved ' + page + '.' + dateNote);
     refreshPages().catch(() => {});
     return true;
   } catch (e) {

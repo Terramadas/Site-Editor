@@ -58,6 +58,8 @@ def build(theme_dir):
     cfg['theme'] = {k: meta[k] for k in ('id', 'name', 'by', 'url', 'licence', 'licenceUrl')}
     cfg['newPage'] = dict(cfg.get('newPage', {}), main=t('page-main.html'))
     cfg['project'] = dict(cfg.get('project', {}), card=card_tpl, page=project_main)
+    if (theme_dir / 'templates' / 'project-post.html').exists():
+        cfg['project']['post'] = t('project-post.html')
     files['assets/site-editor.json'] = json.dumps(cfg, indent=1, ensure_ascii=False).encode('utf-8')
     if (theme_dir / 'LICENSE.txt').exists():
         files['assets/LICENSE-template.txt'] = (theme_dir / 'LICENSE.txt').read_bytes()

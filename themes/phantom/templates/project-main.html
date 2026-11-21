@@ -1,18 +1,13 @@
-					<section data-se="section blocks">
+					<section data-se="section blocks" data-se-role="project">
 						<h1>{{title}}</h1>
-						<p class="date">{{date}}</p>
 						<p>{{text}}</p>
 						<span class="image main"><img src="{{image}}" alt="{{title}}" /></span>
-						<h2>What it does</h2>
-						<p>Describe the project: what problem it solves and how it works.</p>
-						<h2>Parts</h2>
-						<ul>
-							<li>First part</li>
-							<li>Second part</li>
-						</ul>
-						<h2>How I built it</h2>
-						<p>The steps, the mistakes and what you would do differently.</p>
 <!--se:if github-->						<ul class="actions">
 							<li><a href="{{github}}" class="button primary icon brands fa-github">Code on GitHub</a></li>
 						</ul>
 <!--/se:if-->					</section>
+					<section class="post" data-se="section blocks" data-se-type="post">
+						<h2>First blog post</h2>
+						<p class="date">{{date}}</p>
+						<p>What you did, what worked and what did not. Click this text to change it. Use + New blog post to add the next one: the newest post goes on top, and its date becomes the date on the project's tile on the home page.</p>
+					</section>

@@ -70,6 +70,9 @@ A template site works like any other site in the editor, plus:
 * **＋ New project** (top of the elements): name, date, short text, GitHub address and picture.
   It makes the project's page and puts its card at the top of the overview.
   Click a card to change its picture, date, title, page or GitHub button.
+* **＋ New blog post** (Phantom sites, on a project page): a project page is a blog. The button adds a post
+  (title, date, text) on top, newest first. When you save the project page, the card on the overview shows
+  the date of its newest post (dates are read as written, for example "November 21, 2026").
 * **Site settings**: the site name, social links (icons in the menu bar), the copyright line,
   the wording of the template credit, and the background picture. Applied to every page.
 * The header, footer and copyright line are the same on every page: change the footer on one
@@ -82,8 +85,8 @@ A template site works like any other site in the editor, plus:
 
 ### Templates
 Three templates by [HTML5 UP](https://html5up.net), in `themes/`:
-**Massively** (big title over a photo, project cards), **Phantom** (light, projects as coloured
-picture tiles, slide-in menu) and **Editorial** (blog layout with a sidebar). They are licensed
+**Massively** (big title over a photo, project cards), **Phantom** (light, projects as picture
+tiles with the date of the latest post, slide-in menu) and **Editorial** (blog layout with a sidebar). They are licensed
 [CC BY 3.0](https://html5up.net/license): free to use and change, as long as the credit link to
 HTML5 UP stays. The editor always keeps it at the bottom of the page ("Template by HTML5 UP";
 the words can be changed in Site settings, the link can't). Its fonts are reduced to the
@@ -123,6 +126,7 @@ Python's standard library. See the notes at the top of each file.
 The version shows next to "Site editor" (top bar and start screen). It lives in `docs/version.js`
 and is bumped with every change to the editor; add a line here too.
 
+* **1.6** (21 Nov 2026): template sites (Phantom): a project page is a blog. **＋ New blog post** adds a post on top of a project page, and saving the page puts the newest post's date on the project's card. Project tiles show picture, date and title.
 * **1.5** (21 Nov 2026): Columns > **Equal height boxes** (Weebly sites): coloured boxes in a row of columns end on the same line, and the spacers under them are made equal.
 * **1.4** (21 Nov 2026): version number shown in the editor.
 * **1.3** (21 Nov 2026): a failed download names the file it could not read.

@@ -15,6 +15,7 @@ async function loadSiteConfig() {
   $$('.pal').forEach(b => { b.hidden = P.theme && !themeElement(b.dataset.type); });
   $('#btnSite').hidden = !P.theme;
   $('#palProject').hidden = !(P.theme && CFG.project && CFG.project.card);
+  $('#palPost').hidden = !(P.theme && CFG.project && CFG.project.post);
   if (typeof updateIssueButtons === 'function') updateIssueButtons().catch(() => {});
 }
 async function saveSiteConfig() {
@@ -138,6 +139,7 @@ INSPECTORS.project = (el, root) => {
     field('GitHub address', `<input type="url" data-k="gh" placeholder="https://github.com/you/project${ghButtons ? ' (empty: no button)' : ''}" value="${esc(gh ? gh.getAttribute('href') : el.getAttribute('data-se-github') || '')}">`) +
     (ghButtons ? '' : '<p class="hint">This template has no buttons on its cards: the GitHub link shows on the project page (and on the cards of templates that have buttons).</p>') +
     '<p class="hint">Click the short text on the card to change it.</p>' +
+    (/data-se-type="post"/.test((CFG.project && CFG.project.page) || '') ? '<p class="hint">The date follows the newest blog post on the project page: it is updated when you save that page.</p>' : '') +
     `<div class="actions"><button data-k="open" ${pagesList.some(p => p.file === pageHref) ? '' : 'disabled'}>Open the project page</button></div>`;
   const q = k => root.querySelector(`[data-k=${k}]`);
   if (img) { q('edit').onclick = () => openImageEditor({ kind: 'img', img }); q('rep').onclick = () => replaceImage(img); }
@@ -213,6 +215,58 @@ async function newProjectDialog() {
   } catch (e) { status('Could not create the project: ' + e.message, true); }
 }
 $('#palProject').onclick = newProjectDialog;
+
+/* ---------------- blog posts on a project page, and the project's date on its card ---------------- */
+// A project page is a blog: every post is a section marked data-se-type="post" with a <p class="date">.
+// New posts go on top (newest first). The card on the overview shows the date of the newest post.
+const isProjectPage = () => !!(doc && doc.querySelector('[data-se-type="post"], [data-se-role~="project"]'));
+
+function newPost() {
+  if (!doc || !P.theme || !CFG.project || !CFG.project.post) return;
+  if (!isProjectPage()) { status('Open a project page first (a page with blog posts), then add the post.'); return; }
+  const root = doc.querySelector(P.sectionsRoot);
+  if (!root) return;
+  const t = doc.createElement('template');
+  t.innerHTML = '\n' + fillTpl(CFG.project.post, { title: 'New blog post', date: todayText() }).replace(/\s+$/, '') + '\n';
+  const node = mutate(() => {
+    const posts = [...root.children].filter(n => n.matches('[data-se-type="post"]'));
+    const n = t.content.firstElementChild;
+    if (posts.length) root.insertBefore(t.content, posts[0]);
+    else root.appendChild(t.content);
+    selected = n;
+    return n;
+  });
+  node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  const h = node.querySelector('h1, h2, h3');
+  if (h) setTimeout(() => { startEdit(h); selectAllIn(h); }, 50);
+  status('New blog post added at the top. Type its title and text; the date is today.');
+}
+$('#palPost').onclick = newPost;
+
+// Called by save(): the card of this project page gets the date of its newest post.
+// Returns the date text when the card changed, else ''.
+async function syncProjectDate() {
+  if (!doc || !P.theme || !CFG || !CFG.project || !CFG.project.listPage) return '';
+  const listPage = CFG.project.listPage;
+  if (page === listPage) return '';
+  const dates = [...doc.querySelectorAll('[data-se-type="post"] .date')]
+    .map(e => ({ t: e.textContent.trim(), ms: Date.parse(e.textContent.trim()) })).filter(d => d.t && !isNaN(d.ms));
+  if (!dates.length) return '';
+  const newest = dates.reduce((a, b) => (b.ms > a.ms ? b : a));
+  const src = await B.readText(listPage);
+  let changed = false;
+  const out = src.replace(/<article\b[^>]*\bdata-se-type="project"[^>]*>[\s\S]*?<\/article>/g, card => {
+    if (!card.includes('href="' + page + '"')) return card;
+    const c = card
+      .replace(/(\bdata-se-date=")[^"]*(")/, (m, a, b) => a + esc(newest.t) + b)
+      .replace(/(<(?:span|p|div)\b[^>]*\bclass="[^"]*\bdate\b[^"]*"[^>]*>)[^<]*(<\/)/, (m, a, b) => a + esc(newest.t) + b);
+    if (c !== card) changed = true;
+    return c;
+  });
+  if (!changed) return '';
+  await B.savePage(listPage, out);
+  return newest.t;
+}
 
 /* ---------------- site settings: name, social links, copyright, background ---------------- */
 const SOCIAL = [

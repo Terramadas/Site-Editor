@@ -18,9 +18,9 @@ window.SITE_EDITOR_THEMES = [
   "url": "https://html5up.net/phantom",
   "licence": "Creative Commons Attribution 3.0 (CC BY 3.0)",
   "licenceUrl": "https://html5up.net/license",
-  "description": "Clean and light: a short welcome, then your projects as a grid of coloured picture tiles. The menu slides in from the side.",
+  "description": "Clean and light: a short welcome, then your projects as a grid of picture tiles with the date of the latest blog post. Each project page is a blog. The menu slides in from the side.",
   "order": 2,
-  "size": 507167
+  "size": 509173
  },
  {
   "id": "editorial",
