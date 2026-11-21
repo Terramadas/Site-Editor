@@ -1008,13 +1008,16 @@ const INSPECTORS = {
     const cap = P.theme ? null : holder.querySelector(':scope > div[style*="font-size:90%"], :scope > div[style*="font-size: 90%"]');
     const clickOpts = P.theme ? [['link', 'Open link'], ['none', 'Nothing']] : [['zoom', 'Enlarge'], ['link', 'Open link'], ['none', 'Nothing']];
     const mode = !a || !a.getAttribute('href') ? 'none' : (/lightbox/i.test((a.getAttribute('onclick') || '') + (a.getAttribute('rel') || '') + a.className) ? 'zoom' : 'link');
-    const w = /%$/.test(img.style.width) ? parseInt(img.style.width) : 100;
+    // a Weebly picture that text wraps around: a floated box that holds the picture. Size and side are set on the box.
+    const fl = !P.theme && img.closest('span[style*="float"]');
+    const pusher = fl && fl.previousElementSibling && fl.previousElementSibling.classList.contains('imgPusher') ? fl.previousElementSibling : null;
+    const w = fl ? (parseInt(fl.style.width) || parseInt(img.style.width) || 50) : /%$/.test(img.style.width) ? parseInt(img.style.width) : 100;
     root.innerHTML =
       field('Picture', `<div class="thumb" style="background-image:url('${esc(img.src)}');background-size:contain"></div><div class="actions"><button data-k="edit" class="primary">Edit image</button><button data-k="rep">Replace image</button><button data-k="ren">Rename…</button></div>
         <p class="hint" style="margin:6px 0 0">${esc(sitePathOf(img.getAttribute('src')) || '')}</p>`) +
       field('Description (alt text)', `<input type="text" data-k="alt" value="${esc(img.getAttribute('alt') || '')}" placeholder="What is in the picture?">`) +
-      field('Size', `<div class="row"><input type="range" min="10" max="100" data-k="w" value="${w}"><span data-k="wv">${img.style.width && img.style.width !== 'auto' ? w + '%' : 'original'}</span><button data-k="wauto">Original</button></div>`) +
-      field('Align', choice('align', ALIGN, P.theme ? imgAlignOf(img) : alignOf(holder))) +
+      field('Size', `<div class="row"><input type="range" min="10" max="100" data-k="w" value="${w}"><span data-k="wv">${fl || (img.style.width && img.style.width !== 'auto') ? w + '%' : 'original'}</span><button data-k="wauto">Original</button></div>`) +
+      field('Align', choice('align', fl ? [['left', 'Left, text on the right'], ['right', 'Right, text on the left']] : ALIGN, fl ? (fl.style.cssFloat === 'left' ? 'left' : 'right') : P.theme ? imgAlignOf(img) : alignOf(holder))) +
       (cap ? field('Caption', `<input type="text" data-k="cap" value="${esc(cap.textContent.trim())}">`) : '') +
       field('When clicked', choice('click', clickOpts, mode)) +
       `<div data-k="linkbox" ${mode === 'link' ? '' : 'hidden'}>${linkFields(mode === 'link' ? a.getAttribute('href') : '', a && a.target)}</div>`;
@@ -1023,11 +1026,21 @@ const INSPECTORS = {
     q('ren').onclick = () => renameImage(sitePathOf(img.getAttribute('src')));
     q('edit').onclick = () => openImageEditor({ kind: 'img', img });
     q('alt').oninput = live(() => img.setAttribute('alt', q('alt').value));
-    q('w').oninput = live(() => { img.style.width = q('w').value + '%'; img.style.maxWidth = '100%'; q('wv').textContent = q('w').value + '%'; });
-    q('wauto').onclick = () => mutate(() => { img.style.width = 'auto'; img.style.maxWidth = '100%'; selected = el; });
+    q('w').oninput = live(() => {
+      if (fl) { fl.style.width = q('w').value + '%'; img.style.width = '100%'; img.style.boxSizing = 'border-box'; img.style.margin = '0'; img.style.maxWidth = '100%'; }
+      else { img.style.width = q('w').value + '%'; img.style.maxWidth = '100%'; }
+      q('wv').textContent = q('w').value + '%';
+    });
+    q('wauto').onclick = () => mutate(() => { if (fl) fl.style.width = ''; img.style.width = 'auto'; img.style.maxWidth = '100%'; selected = el; });
     onChoice(root, 'align', live(v => {
       // template sites show pictures as blocks: they are placed with their margins, not text alignment
-      if (P.theme) { img.style.marginLeft = v === 'left' ? '' : 'auto'; img.style.marginRight = v === 'center' ? 'auto' : ''; }
+      if (fl) {   // the text follows: it wraps on the other side
+        if (!fl.style.width || fl.style.width === 'auto') { fl.style.width = w + '%'; img.style.width = '100%'; img.style.boxSizing = 'border-box'; img.style.margin = '0'; }
+        fl.style.cssFloat = v; fl.style.clear = v;
+        fl.style.marginLeft = v === 'right' ? '15px' : '0'; fl.style.marginRight = v === 'left' ? '15px' : '0';
+        if (pusher) pusher.style.cssFloat = v;
+      }
+      else if (P.theme) { img.style.marginLeft = v === 'left' ? '' : 'auto'; img.style.marginRight = v === 'center' ? 'auto' : ''; }
       else holder.style.textAlign = v;
     }));
     if (cap) q('cap').oninput = live(() => { cap.textContent = q('cap').value; });
@@ -1574,6 +1587,27 @@ async function showStart() {
     catch (e) { if (e.name !== 'AbortError') msg.textContent = e.message; }
   };
   reo.onclick = () => go(() => Local.reopenFolder());
+  const lib = await Local.libraryInfo();
+  $('#optContinue').hidden = !lib;
+  if (lib) {
+    $('#btnContinue').textContent = 'Continue with “' + lib.label + '”';
+    $('#contInfo').textContent = lib.count + ' files, copied into this browser on ' + new Date(lib.time).toLocaleString() +
+      '. Changes you made but did not download are offered when it opens. Download site is still the real save.';
+  }
+  $('#btnContinue').onclick = () => go(() => Local.loadLibrary());
+  $('#btnForgetLib').onclick = async () => { await Local.forgetLibrary(); $('#optContinue').hidden = true; };
+  if (!showStart.dropBound) {
+    showStart.dropBound = true;
+    const st = $('#start');
+    ['dragenter', 'dragover'].forEach(t => st.addEventListener(t, e => { e.preventDefault(); st.classList.add('drop'); }));
+    st.addEventListener('dragleave', e => { if (e.target === st) st.classList.remove('drop'); });
+    st.addEventListener('drop', e => {
+      e.preventDefault(); st.classList.remove('drop');
+      const dt = e.dataTransfer, files = [...dt.files];
+      const entries = [...dt.items].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);   // read now: items expire after the event
+      go(async () => { $('#startMsg').textContent = 'Reading the dropped site…'; await Local.loadDropped(entries, files); });
+    });
+  }
   $('#btnChoose').onclick = () => go(() => Local.openFolder());
   $('#btnLoadFolder').onclick = () => { $('#inFolder').value = ''; $('#inFolder').click(); };
   $('#btnLoadZip').onclick = () => { $('#inZip').value = ''; $('#inZip').click(); };
@@ -1581,7 +1615,7 @@ async function showStart() {
   $('#inZip').onchange = () => { const z = $('#inZip').files[0]; if (z) go(async () => { msg.textContent = 'Opening ' + z.name + '…'; await Local.loadZip(z); }); };
 }
 
-async function downloadSite() {
+async function downloadWhole() {
   if (!isLoaded()) return;
   if (dirty && !(await save())) return;
   const b = $('#btnDownload');
@@ -1605,6 +1639,47 @@ async function downloadSite() {
     a.href = URL.createObjectURL(blob); a.download = 'website-' + day + '.zip'; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     status('Downloaded ' + a.download + ' (' + (blob.size / 1048576).toFixed(0) + ' MB). Put its docs and image-originals folders in your website folder.', true);
+    updateDownload();
+  } catch (e) { status('Download failed: ' + e.message, true); }
+  b.disabled = false;
+}
+// Download site: the whole site, or only what changed since the site was loaded
+async function downloadSite() {
+  if (!isLoaded()) return;
+  if (dirty && !(await save())) return;
+  const n = Local.store().changeCount();
+  if (!n) return downloadWhole();
+  const r = await modal('Download site', `<p>What do you want to download?</p>
+    <label class="row"><input type="radio" name="dlKind" value="whole" checked> <span><b>The whole site</b> as one .zip. Safest: you replace your website's <b>docs</b> folder with it.</span></label>
+    <label class="row"><input type="radio" name="dlKind" value="changes"> <span><b>Only the changes</b> (about ${n} file${n === 1 ? '' : 's'} changed since you loaded the site). A much smaller .zip, but you have to put the files in place yourself; the next window explains how.</span></label>`,
+  [['cancel', 'Cancel'], ['ok', 'Download', 'primary']], () => ({ kind: ($('input[name=dlKind]:checked') || {}).value }));
+  if (!r || r.value !== 'ok') return;
+  return r.data.kind === 'changes' ? downloadChanges() : downloadWhole();
+}
+
+async function downloadChanges() {
+  const b = $('#btnDownload');
+  b.disabled = true;
+  try {
+    const d = new Date(), day = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const { blob, put, gone } = await Local.store().exportChanges(pct => { status('Making the zip… ' + Math.round(pct) + '%', true); });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'website-changes-' + day + '.zip'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    const list = (arr, max) => '<ul style="max-height:130px;overflow:auto;margin:4px 0 8px;padding-left:20px;font-size:12.5px">' +
+      arr.slice(0, max).map(p => '<li>' + esc(p) + '</li>').join('') + (arr.length > max ? '<li>… and ' + (arr.length - max) + ' more</li>' : '') + '</ul>';
+    await modal('Put the changes in place yourself', `<p><b>${esc(a.download)}</b> is in your downloads (${fmtSize(blob.size)}). It holds only the ${put.length} file${put.length === 1 ? '' : 's'} you changed.
+      The editor cannot write into your folder in this browser, so:</p>
+      <ol style="padding-left:20px;margin:6px 0">
+        <li>Open the .zip so you get a <b>docs</b> folder (and maybe an <b>image-originals</b> folder).</li>
+        <li>Drag them into your website folder <b>while holding the Option key</b> and choose <b>Merge</b>.</li>
+        <li><b>Do not choose Replace</b>: that would delete every file that is not in this zip.</li>
+      </ol>
+      ${put.length ? '<p style="margin:6px 0 0">Files in the zip:</p>' + list(put, 30) : ''}
+      ${gone.length ? '<p style="margin:6px 0 0"><b>Delete these yourself</b> (you removed them in the editor):</p>' + list(gone, 30) : ''}
+      <p style="margin:6px 0 0">The same instructions are in the zip, in <i>READ ME - changes.txt</i>.</p>`,
+    [['ok', 'Done', 'primary']]);
+    status('Downloaded ' + a.download + '. Merge its folders into your website folder.', true);
     updateDownload();
   } catch (e) { status('Download failed: ' + e.message, true); }
   b.disabled = false;

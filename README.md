@@ -18,6 +18,21 @@ and the editor offers your unsaved work. **Download site** gives the whole site 
 with a `docs` folder inside: replace your website's `docs` folder with it, or load the zip
 again to keep editing.
 
+**Folder window only opens the folder (DuckDuckGo, some Safari versions)?** Drag the website
+folder (or the .zip) from Finder onto the start screen instead.
+
+**Download site** asks what you want: **the whole site** (replace your `docs` folder with it) or
+**only the changes** (a small zip with just the files you changed since loading the site). With
+changes only, a window explains how to put them in place: drag the folders into your website
+folder holding the Option key and choose **Merge** (never Replace), and delete by hand any files
+the window lists as removed. The same text is in the zip as `READ ME - changes.txt`.
+
+**Continue.** Loading a site also keeps a full copy of it in the browser. Next time the start
+screen shows **Continue with "<site>"**, with no folder or .zip needed, and offers your
+unsaved changes. **Remove saved copy** deletes it. The copy is a convenience: a browser can
+clear its storage (Safari-based browsers do after a week without use), so **Download site**
+is still the real save.
+
 ### Open folder (Chrome, Edge, Brave)
 **Choose website folder…** saves straight into the folder. The previous version of every
 saved page is kept in `editor-backups/` next to the site folder.

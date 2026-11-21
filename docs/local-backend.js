@@ -188,24 +188,44 @@ const Local = (() => {
         sinceDownload = false;
         return blob;
       },
+      async exportChanges(onProgress) {
+        // only the files changed since the site was loaded, laid out like the whole-site zip (docs/…, image-originals/…)
+        const z = new JSZip(), put = [], gone = [];
+        const comp = p => ({ compression: /\.(html?|css|js|json|svg|txt|xml)$/i.test(p) ? 'DEFLATE' : 'STORE' });
+        for (const [p, d] of changed.site) { z.file('docs/' + p, d, comp(p)); put.push('docs/' + p); }
+        for (const [p, d] of changed.originals) { z.file(AREA_DIRS.originals + '/' + p, d, comp(p)); put.push(AREA_DIRS.originals + '/' + p); }
+        deleted.site.forEach(p => gone.push('docs/' + p));
+        deleted.originals.forEach(p => gone.push(AREA_DIRS.originals + '/' + p));
+        z.file('READ ME - changes.txt',
+          'This zip holds only the files you changed. Copy the docs and image-originals folders into your website folder\n' +
+          'and MERGE them with the folders that are already there (in Finder: hold the Option key while dropping, then choose Merge).\n' +
+          'Do NOT choose Replace: that would remove every file that is not in this zip.\n\n' +
+          'Files in this zip (' + put.length + '):\n' + put.join('\n') + '\n\n' +
+          (gone.length ? 'Files you removed in the editor. Delete them from the website folder yourself (' + gone.length + '):\n' + gone.join('\n') + '\n' : 'No files were removed.\n'));
+        const blob = await z.generateAsync({ type: 'blob', streamFiles: true }, m => onProgress && onProgress(m.percent));
+        sinceDownload = false;
+        return { blob, put, gone };
+      },
     };
     return self;
   }
 
   /* browser storage for unsaved work in loaded mode (and the remembered folder) */
+  const IDB_STORES = { handles: 'handles', sessions: 'sessions', lib: 'library', libfiles: 'libfiles' };
   function idb(mode, fn) {
+    const write = mode.endsWith('-w'), name = IDB_STORES[mode.replace(/-w$/, '')];
     return new Promise((resolve, reject) => {
-      const r = indexedDB.open('site-editor', 2);
-      r.onupgradeneeded = () => {
-        if (!r.result.objectStoreNames.contains('handles')) r.result.createObjectStore('handles');
-        if (!r.result.objectStoreNames.contains('sessions')) r.result.createObjectStore('sessions');
-      };
+      const r = indexedDB.open('site-editor', 3);
+      r.onupgradeneeded = () => Object.values(IDB_STORES).forEach(n => {
+        if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n);
+      });
       r.onerror = () => reject(r.error);
       r.onsuccess = () => {
-        const tx = r.result.transaction(mode === 'handles' || mode === 'handles-w' ? 'handles' : 'sessions', mode.endsWith('-w') ? 'readwrite' : 'readonly');
-        const q = fn(tx.objectStore(tx.objectStoreNames[0]));
-        tx.oncomplete = () => resolve(q && q.result);
+        const tx = r.result.transaction(name, write ? 'readwrite' : 'readonly');
+        const q = fn(tx.objectStore(name));
+        tx.oncomplete = () => { r.result.close(); resolve(q && q.result); };
         tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
       };
     });
   }
@@ -424,20 +444,85 @@ const Local = (() => {
     }
     return { root, sources };
   }
-  // a folder chosen with the ordinary file picker (all browsers): read-only, kept in memory
-  function loadFileList(files) {
-    const items = [...files].map(f => ({ path: f.webkitRelativePath || f.name, size: f.size, get: async () => f }))
-      .filter(i => !/(^|\/)(\._[^/]*|\.DS_Store|\.git|__MACOSX)(\/|$)/.test(i.path));
-    const { root, sources } = sortIntoAreas(items);
-    store = memoryStore(root.replace(/\/$/, '') || (items[0] ? items[0].path.split('/')[0] : 'website'), sources);
+  /* a full copy of the loaded site is kept in the browser, so the start screen can offer
+     "Continue" without loading the folder or .zip again (changes are kept separately, see memoryStore) */
+  const LIB_AREAS = ['site', 'originals', 'unused'];
+  let libBusy = null;
+  async function saveLibrary(label, sources) {
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* ignore */ }
+    const run = async () => {
+      await idb('lib-w', st => st.clear()); await idb('libfiles-w', st => st.clear());
+      const paths = {}; let count = 0;
+      for (const area of LIB_AREAS) {
+        paths[area] = [];
+        for (const [path, src] of sources[area] || []) {
+          const data = await src.get();
+          await idb('libfiles-w', st => st.put(data instanceof Blob ? data : new Blob([data]), area + '|' + path));
+          paths[area].push([path, src.size || 0]); count++;
+        }
+      }
+      await idb('lib-w', st => st.put({ label, time: Date.now(), count, paths }, 'meta'));   // last: a half-saved copy is never offered
+    };
+    libBusy = run().catch(async () => { await idb('lib-w', st => st.clear()).catch(() => {}); await idb('libfiles-w', st => st.clear()).catch(() => {}); });
+    return libBusy;
+  }
+  const libraryInfo = () => idb('lib', st => st.get('meta')).catch(() => null);
+  async function forgetLibrary() { await idb('lib-w', st => st.clear()).catch(() => {}); await idb('libfiles-w', st => st.clear()).catch(() => {}); }
+  async function loadLibrary() {
+    const meta = await libraryInfo();
+    if (!meta) throw new Error('The saved copy is not there any more. Load the folder or .zip again.');
+    const sources = {};
+    for (const area of LIB_AREAS) {
+      sources[area] = new Map();
+      for (const [path, size] of meta.paths[area] || [])
+        sources[area].set(path, { path, size, get: () => idb('libfiles', st => st.get(area + '|' + path)).then(b => { if (!b) throw new Error('not found'); return b; }) });
+    }
+    store = memoryStore(meta.label, sources);
     return store;
+  }
+
+  function loadItems(items) {
+    const { root, sources } = sortIntoAreas(items);
+    const label = root.replace(/\/$/, '') || (items[0] ? items[0].path.split('/')[0] : 'website');
+    store = memoryStore(label, sources);
+    saveLibrary(label, sources);
+    return store;
+  }
+  // a folder chosen with the ordinary file picker (most browsers): read-only, kept in memory
+  function loadFileList(files) {
+    return loadItems([...files].map(f => ({ path: f.webkitRelativePath || f.name, size: f.size, get: async () => f }))
+      .filter(i => !/(^|\/)(\._[^/]*|\.DS_Store|\.git|__MACOSX)(\/|$)/.test(i.path)));
+  }
+  // a folder (or .zip) dropped on the start screen: works in browsers whose folder picker does not
+  // (for example DuckDuckGo). entries: webkitGetAsEntry() results, taken inside the drop event.
+  async function loadDropped(entries, files) {
+    const one = entries.length === 1 ? entries[0] : null;
+    if (one && one.isFile && /\.zip$/i.test(one.name)) return loadZip(await new Promise((ok, no) => one.file(ok, no)));
+    if (!entries.length && files && files.length === 1 && /\.zip$/i.test(files[0].name)) return loadZip(files[0]);
+    if (!entries.length) throw new Error('This browser did not let the editor read the dropped folder. Load a .zip instead.');
+    const SKIP = /^(\.git|node_modules|__MACOSX)$/, JUNK = /^(\._|\.DS_Store)/;
+    const readAll = r => new Promise((ok, no) => { const out = []; const step = () => r.readEntries(b => { if (!b.length) ok(out); else { out.push(...b); step(); } }, no); step(); });
+    const items = [];
+    const walk = async (e, prefix) => {
+      if (e.isFile) {
+        if (JUNK.test(e.name)) return;
+        const f = await new Promise((ok, no) => e.file(ok, no));
+        items.push({ path: prefix + e.name, size: f.size, get: async () => f });
+      } else if (!SKIP.test(e.name)) {
+        for (const k of await readAll(e.createReader())) await walk(k, prefix + e.name + '/');
+      }
+    };
+    for (const e of entries) await walk(e, '');
+    return loadItems(items);
   }
   async function loadZip(file) {
     const z = await JSZip.loadAsync(file);
     const items = Object.values(z.files).filter(e => !e.dir && !/(^|\/)(\._[^/]*|\.DS_Store|__MACOSX)(\/|$)/.test(e.name))
       .map(e => ({ path: e.name, size: (e._data && e._data.uncompressedSize) || 0, get: () => e.async('uint8array') }));
     const { sources } = sortIntoAreas(items);
-    store = memoryStore(file.name.replace(/\.zip$/i, ''), sources);
+    const label = file.name.replace(/\.zip$/i, '');
+    store = memoryStore(label, sources);
+    saveLibrary(label, sources);
     return store;
   }
 
@@ -469,7 +554,7 @@ const Local = (() => {
   }
 
   return {
-    init, canOpenFolder, openFolder, reopenFolder, lastFolderName, loadFileList, loadZip, inertScripts, createSite,
+    init, canOpenFolder, openFolder, reopenFolder, lastFolderName, loadFileList, loadZip, loadDropped, loadLibrary, libraryInfo, forgetLibrary, inertScripts, createSite,
     store: () => store,
     pending: async () => (store && store.kind === 'memory' ? loadSession(store.key) : null),
     sessionCount,

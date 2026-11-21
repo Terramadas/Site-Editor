@@ -197,3 +197,5 @@ kbd { background: #f1efe9; border: 1px solid var(--line); border-radius: 4px; pa
 .btnbox { border-bottom: 1px solid #e6e9ee; padding-bottom: 6px; margin-bottom: 8px; }
 [hidden] { display: none !important; }
 #pageSel { max-width: 220px; }
+#start.drop .startbox { outline: 3px dashed #2f6fed; outline-offset: 4px; }
+#contInfo { margin: 0 0 8px; }

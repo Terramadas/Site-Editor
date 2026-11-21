@@ -26,7 +26,7 @@
   <span id="status" aria-live="polite"></span>
   <button id="btnPreview" title="Open the saved page in a new tab, with all its scripts running">Preview</button>
   <button id="btnSave" class="primary" title="Save (⌘S)">Save</button>
-  <button id="btnDownload" hidden title="Download the whole site, with your changes, as a .zip">Download site</button>
+  <button id="btnDownload" hidden title="Download the whole site, or only your changes, as a .zip">Download site</button>
 </header>
 
 <main>
@@ -73,6 +73,11 @@
   <div class="startbox">
     <h1>Site editor</h1>
     <p>Open your website to edit it, or start a new one. Nothing leaves your computer; upload the site with GitHub Desktop when you are done.</p>
+    <div class="opt" id="optContinue" hidden>
+      <h3>Continue</h3>
+      <p id="contInfo"></p>
+      <div class="actions"><button class="primary" id="btnContinue"></button><button id="btnForgetLib">Remove saved copy</button></div>
+    </div>
     <div class="opt" id="optFolder" hidden>
       <h3>Open folder</h3>
       <p>Saves straight into the folder. Chrome, Edge and Brave.</p>
@@ -88,7 +93,7 @@
       <p>Start from a ready-made template and fill in your own text and pictures.</p>
       <div class="actions"><button id="btnNew">New website…</button></div>
     </div>
-    <p class="hint">Choose the <b>website</b> folder (the one that contains <code>docs</code>) or the site folder itself.</p>
+    <p class="hint">Choose the <b>website</b> folder (the one that contains <code>docs</code>) or the site folder itself. If your browser's folder window only opens the folder, <b>drag the folder (or the .zip) onto this window</b> instead.</p>
     <p id="startMsg"></p>
   </div>
   <input type="file" id="inFolder" webkitdirectory multiple hidden>
