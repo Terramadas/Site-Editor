@@ -118,3 +118,13 @@ internet); `tools/reorganise_images.py` moves the images a site uses out of Weeb
 every page and image-originals (run it with `--dry-run` first to see the plan). They use only
 Python's standard library. See the notes at the top of each file.
 `tools/build_themes.py` rebuilds the templates for New website (see Templates above).
+
+## Version and changelog
+The version shows next to "Site editor" (top bar and start screen). It lives in `docs/version.js`
+and is bumped with every change to the editor; add a line here too.
+
+* **1.4** (21 Nov 2026): version number shown in the editor.
+* **1.3** (21 Nov 2026): a failed download names the file it could not read.
+* **1.2** (21 Nov 2026): Download site asks for the whole site or only the changes, with instructions to put the files in place.
+* **1.1** (21 Nov 2026): Continue (full copy kept in the browser) and dropping a folder or .zip on the start screen, for DuckDuckGo.
+* **1.0** (until 20 Nov 2026): the editor as in the status doc, including magazine issues and the floated-picture fix.

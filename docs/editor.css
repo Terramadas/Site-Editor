@@ -199,3 +199,4 @@ kbd { background: #f1efe9; border: 1px solid var(--line); border-radius: 4px; pa
 #pageSel { max-width: 220px; }
 #start.drop .startbox { outline: 3px dashed #2f6fed; outline-offset: 4px; }
 #contInfo { margin: 0 0 8px; }
+.seVersion { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 2px; }

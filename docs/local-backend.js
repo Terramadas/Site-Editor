@@ -127,6 +127,8 @@ const Local = (() => {
       }).catch(() => {}), 600);
     };
     const toBlob = d => d instanceof Blob ? d : new Blob([d]);
+    // a file that cannot be read says which one it was (the browser's own message does not)
+    const nameOnFail = (p, path) => Promise.resolve(p).catch(e => { throw new Error('Cannot read “' + path + '” (' + ((e && (e.message || e.name)) || 'unknown error') + ')'); });
     const self = {
       kind: 'memory', label, key,
       backupsLocation: '',
@@ -177,11 +179,11 @@ const Local = (() => {
         const leaveOut = (opts && opts.leaveOut) || new Set();
         for (const { path } of await self.listFiles('site')) {
           if (leaveOut.has(path)) continue;
-          const data = changed.site.has(path) ? changed.site.get(path) : sources.site.get(path).get();
+          const data = changed.site.has(path) ? changed.site.get(path) : nameOnFail(sources.site.get(path).get(), path);
           docs.file(path, data, { compression: /\.(html?|css|js|json|svg|txt|xml)$/i.test(path) ? 'DEFLATE' : 'STORE' });
         }
         for (const { path } of await self.listFiles('originals')) {
-          const data = changed.originals.has(path) ? changed.originals.get(path) : sources.originals.get(path).get();
+          const data = changed.originals.has(path) ? changed.originals.get(path) : nameOnFail(sources.originals.get(path).get(), path);
           orig.file(path, data, { compression: /\.json$/i.test(path) ? 'DEFLATE' : 'STORE' });
         }
         const blob = await z.generateAsync({ type: 'blob', streamFiles: true }, m => onProgress && onProgress(m.percent));

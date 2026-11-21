@@ -1097,7 +1097,10 @@ const INSPECTORS = {
     const pad = parseInt(tds[0] && tds[0].style.paddingLeft) || 15;
     root.innerHTML = field('Column widths (%)', `<div class="row">${tds.map((td, i) => `<input type="number" min="5" max="95" data-i="${i}" value="${Math.round(parseFloat(td.style.width) || 100 / tds.length)}">`).join('')}</div>`) +
       `<div class="actions"><button data-k="eq">Equal widths</button><button data-k="addc">+ Column</button><button data-k="rmc" ${tds.length < 2 ? 'disabled' : ''}>− Last column</button></div>` +
-      field('Space between columns', `<div class="row"><input type="range" min="0" max="40" data-k="pad" value="${pad}"><span data-k="pv">${pad * 2}px</span></div>`);
+      field('Space between columns', `<div class="row"><input type="range" min="0" max="40" data-k="pad" value="${pad}"><span data-k="pv">${pad * 2}px</span></div>`) +
+      field('Height', `<label class="row"><input type="checkbox" data-k="eqh" ${el.classList.contains('se-equal') ? 'checked' : ''}> Equal height boxes</label>
+        <p class="hint">Coloured boxes in the columns all end on the same line (on a phone they stack as usual). The space under the boxes is made equal too.</p>`);
+    root.querySelector('[data-k=eqh]').onchange = e => mutate(() => { setEqualHeight(el, e.target.checked, tds); selected = el; });
     const setW = live(ws => tds.forEach((td, i) => { td.style.width = ws[i] + '%'; }));
     root.querySelectorAll('[data-i]').forEach(inp => inp.onchange = () => {
       const ws = [...root.querySelectorAll('[data-i]')].map(x => +x.value || 1);
@@ -1152,6 +1155,35 @@ const INSPECTORS = {
 
   element(el, root) { root.innerHTML = '<p class="hint">Use “Edit HTML” below to change this element.</p>'; },
 };
+
+/* "Equal height boxes" on a Weebly columns block: the class se-equal plus a style block inside the block itself
+   (so it travels with it). Without it a coloured box is only as tall as its own text. Needs :has() (all current browsers;
+   in an older one the boxes just stay as they were). Below 768px the columns stack as before. */
+const EQUAL_CSS = `@media screen and (min-width: 768px) {
+.wsite-multicol.se-equal .wsite-multicol-table, .wsite-multicol.se-equal .wsite-multicol-tbody { display: block; width: 100%; }
+.wsite-multicol.se-equal .wsite-multicol-tr { display: flex; align-items: stretch; }
+.wsite-multicol.se-equal .wsite-multicol-col { display: flex; flex-direction: column; box-sizing: border-box; }
+.wsite-multicol.se-equal .wsite-multicol-col > div:has(.colored-box),
+.wsite-multicol.se-equal .wsite-multicol-col > div:has(.colored-box) > div,
+.wsite-multicol.se-equal .platform-element-contents:has(.colored-box),
+.wsite-multicol.se-equal .colored-box { display: flex; flex-direction: column; flex: 1 1 auto; }
+.wsite-multicol.se-equal .colored-box-content { float: none; flex: 1 1 auto; }
+}`;
+function setEqualHeight(el, on, tds) {
+  el.classList.toggle('se-equal', on);
+  let st = [...el.children].find(c => c.matches && c.matches('style[data-se-equal]'));
+  if (on && !st) { st = doc.createElement('style'); st.setAttribute('data-se-equal', ''); st.textContent = EQUAL_CSS; el.appendChild(st); }
+  if (!on && st) st.remove();
+  if (!on) return;
+  // the spacer at the bottom of each column counts too: make them the same height, or the boxes still end at different lines
+  const last = tds.map(td => { const l = td.lastElementChild; return l && l.classList.contains('wsite-spacer') ? l : null; });
+  const h = Math.max(0, ...last.filter(Boolean).map(sp => parseInt(sp.style.height) || 0));
+  if (!h) return;
+  tds.forEach((td, i) => {
+    if (last[i]) last[i].style.height = h + 'px';
+    else { const sp = doc.createElement('div'); sp.className = 'wsite-spacer'; sp.style.height = h + 'px'; td.appendChild(sp); }
+  });
+}
 
 function textInspector(el, root) {
   root.innerHTML = field('Align', choice('align', [...ALIGN, ['justify', 'Justify']], (el.style.textAlign || 'left'))) +
