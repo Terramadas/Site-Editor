@@ -123,6 +123,7 @@ Python's standard library. See the notes at the top of each file.
 The version shows next to "Site editor" (top bar and start screen). It lives in `docs/version.js`
 and is bumped with every change to the editor; add a line here too.
 
+* **1.5** (21 Nov 2026): Columns > **Equal height boxes** (Weebly sites): coloured boxes in a row of columns end on the same line, and the spacers under them are made equal.
 * **1.4** (21 Nov 2026): version number shown in the editor.
 * **1.3** (21 Nov 2026): a failed download names the file it could not read.
 * **1.2** (21 Nov 2026): Download site asks for the whole site or only the changes, with instructions to put the files in place.
